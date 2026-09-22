@@ -1,0 +1,13 @@
+# At least 8 queries: easy / medium / hard / adversarial (2+ each).
+# ground_truth is needed for Context Recall and Answer Correctness.
+queries:
+  - id: E1
+    difficulty: easy
+    question: ""
+    ground_truth: ""
+    expected_agent: document_qa
+  - id: A1
+    difficulty: adversarial
+    question: ""
+    ground_truth: ""
+    expected_agent: document_qa

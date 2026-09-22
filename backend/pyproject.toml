@@ -1,0 +1,30 @@
+[project]
+name = "project-intelligence-backend"
+version = "0.1.0"
+description = "Multi-agent RAG API over project status reports, financials and risk registers."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.141.1",
+    "uvicorn[standard]>=0.53.0",
+    "pydantic-settings>=2.15.0",
+    "python-multipart>=0.0.32",
+    "langchain>=1.4.2",
+    "langchain-core>=1.6.4",
+    # Add provider, vector store, parsing and RAGAS packages once the stack is locked.
+]
+
+# Installed by `uv sync`; the Docker image builds with `--no-dev`.
+# RAGAS and synthetic-data tooling belong in their own groups here.
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "httpx>=0.28.1",
+]
+
+# The app is run as a module from this directory, not installed as a package.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
