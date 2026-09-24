@@ -2,12 +2,17 @@
 
 An AI assistant that ingests project documents (PDF status reports, CSV/Excel financials and risk registers) and answers questions about project status, risks and budgets. Queries are routed to specialised agents on top of a retrieval-augmented generation (RAG) pipeline, and every answer shows which agent handled it and the sources it used.
 
-> **Live demo:** _frontend pending_ · **API:** https://project-intelligence-backend-215402207736.us-central1.run.app
+> **Live demo:** https://frontend-bay-nu-35.vercel.app
+> **API:** https://project-intelligence-backend-215402207736.us-central1.run.app
 > ([`/docs`](https://project-intelligence-backend-215402207736.us-central1.run.app/docs) ·
 > [readiness](https://project-intelligence-backend-215402207736.us-central1.run.app/v1/health/dependencies))
 > **Walkthrough video (3–5 min):** _TBD_
 >
-> The backend scales to zero, so the first request after an idle period waits for a cold start.
+> Frontend on Vercel, backend on Cloud Run with Qdrant Cloud and Redis Cloud behind it — all inside
+> free tiers (DECISIONS.md D-009). The backend scales to zero, so the first request after an idle
+> period waits for a cold start. Generation runs on Gemini's free tier, whose daily quota a long
+> demo session can exhaust; the model chain then falls through to a smaller model and, once every
+> model is spent, answers stop until the quota resets.
 
 ## Documentation
 
