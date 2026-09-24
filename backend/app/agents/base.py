@@ -53,10 +53,9 @@ class BaseAgent(ABC):
         `app.llm.providers.get_llm` by patching that module attribute.
         """
         from langchain.agents import create_agent
-        from langchain.agents.middleware import ModelFallbackMiddleware
-
         from app.config import get_settings
         from app.llm.providers import get_llms
+        from app.llm.quota import QuotaAwareFallback, quota_scope
         from app.skills.evidence import evidence_scope
 
         settings = get_settings()
@@ -65,14 +64,17 @@ class BaseAgent(ABC):
         # middleware rather than as `RunnableWithFallbacks`, which has no
         # `bind_tools`. The middleware retries the *same* turn on the next
         # model, so a mid-loop quota failure resumes with the evidence already
-        # collected rather than restarting the question.
+        # collected rather than restarting the question. `QuotaAwareFallback`
+        # additionally remembers, for this request only, which models answered
+        # 429, so the loop stops re-walking an exhausted model on every one of
+        # its generations.
         primary, *fallbacks = get_llms(settings.llm_models, settings)
         loop = create_agent(
             model=primary,
             tools=list(self.skills),
             system_prompt=self.system_prompt or None,
             name=self.name,
-            middleware=[ModelFallbackMiddleware(*fallbacks)] if fallbacks else [],
+            middleware=[QuotaAwareFallback(*fallbacks)] if fallbacks else [],
         )
 
         # The budget lives in the collector rather than in
@@ -80,7 +82,7 @@ class BaseAgent(ABC):
         # graph -- see the note on `Evidence`. `recursion_limit` is the backstop
         # for a model that keeps asking after being told the budget is spent; it
         # raises, which the graph turns into a degraded result rather than a 500.
-        with evidence_scope(budget=settings.agent_max_tool_calls) as evidence:
+        with quota_scope(), evidence_scope(budget=settings.agent_max_tool_calls) as evidence:
             state = await loop.ainvoke(
                 {"messages": [{"role": "user", "content": inp.question}]},
                 config={"recursion_limit": 2 * settings.agent_max_tool_calls + 6},
