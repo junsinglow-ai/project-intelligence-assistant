@@ -7,11 +7,22 @@ Each entry records what was decided, what else was considered, why, what trade-o
 ## D-001: LLM provider selected by deployment mode
 
 - **Date:** 2026-09-22
-- **Decision:** Generation runs against Google Gemini (`gemini-2.5-flash`, free tier) in the default
-  cloud mode and against Ollama (`qwen2.5:7b`) in on-prem mode. Routing and follow-up rewriting use a
-  cheaper model in each mode (`gemini-2.5-flash-lite` / `llama3.2:3b`), since classifying a question
-  into one of a handful of agents does not need the answering model. Both integrations ship in every
-  image; `DEPLOYMENT_MODE` chooses between them at startup.
+- **Decision:** Generation runs against Google Gemini (free tier) in the default cloud mode and
+  against Ollama (`qwen2.5:7b`) in on-prem mode. Routing and follow-up rewriting use a cheaper model
+  in each mode, since classifying a question into one of a handful of agents does not need the
+  answering model. Both integrations ship in every image; `DEPLOYMENT_MODE` chooses between them at
+  startup.
+- **Amended 2026-09-24.** The cloud defaults are now *chains* rather than single models —
+  `gemini-3.6-flash,gemini-3.5-flash,gemini-flash-lite-latest` for answering and
+  `gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-flash-lite-latest` for routing. Two things
+  forced this. `gemini-2.5-flash` and `gemini-2.5-flash-lite`, the original choices, now answer
+  generateContent with **404 NOT_FOUND** while still appearing in the provider's ListModels
+  response — so a single-model default left the deployment with nothing to fall through to, and the
+  readiness probe reported it healthy (see the amendment note in D-009). And on the free tier the
+  full `flash` models are the ones that exhaust: measured on 2026-09-24, `gemini-3.8-flash`,
+  `gemini-3.5-flash` and the `gemini-flash-latest` alias all returned 429 within a few minutes of
+  light use, while every `lite` model answered in about a second. Each chain therefore ends in a
+  lite model, because the last entry is the one that has to work.
 - **Alternatives considered:** Groq free tier (fastest hosted inference and a viable cloud swap, but
   serves no embedding models); OpenRouter free models (widest selection behind one key, rejected for
   unpredictable availability — a demo failure would look like a defect in this system); vLLM or TGI
@@ -258,6 +269,12 @@ Each entry records what was decided, what else was considered, why, what trade-o
   baked in, the ONNX weights are downloaded at build time into `EMBEDDING_CACHE_DIR` /
   `RERANK_CACHE_DIR`, the data paths are set as absolute `ENV` defaults (a relative path anchors to
   `/` in the image, not `/app`), and `CMD` honours `$PORT`.
+- **Amended 2026-09-24, readiness.** `/v1/health/dependencies` computed `status` from the LLM
+  check's `reachable` flag alone, which only means the provider answered a ListModels call. A chain
+  of models that no longer exist reported `ok`. It now also requires at least one model per chain to
+  be present (`any_model_present`). The bound worth knowing: presence means "listed", not "will
+  generate" — the retired 2.5 models are still listed — so only a real generation catches a
+  listed-but-retired model. Verified instead by running the cloud path end to end before deploying.
 - **Revisit when:** the demo needs to stay warm, uploads need to persist, or a second replica is
   wanted — at which point the session store's process-locality (ARCHITECTURE.md §7.2) binds before
   the host does.

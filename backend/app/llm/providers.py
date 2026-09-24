@@ -271,6 +271,27 @@ def _all_present(present: dict[str, dict[str, bool]]) -> bool:
     return all(found for chain in present.values() for found in chain.values())
 
 
+def any_model_present(status: dict[str, Any]) -> bool:
+    """Whether each chain has at least one model the provider lists.
+
+    Not `_all_present`: a chain exists precisely so a missing or exhausted
+    fallback is survivable, so requiring every entry would report a healthy
+    deployment as degraded. One usable model per chain is the real bar.
+
+    A caveat worth knowing, because it bounds what this can promise: presence
+    means "the provider lists it", not "it will generate". Google's ListModels
+    still returns `gemini-2.5-flash` and `gemini-2.5-flash-lite`, both of which
+    now answer generateContent with 404 NOT_FOUND -- which is how they survived
+    as the cloud defaults. Listing is the cheapest check that catches a typo or
+    a model pulled from the catalogue entirely; only a real generation catches
+    a listed-but-retired one.
+    """
+    present = status.get("models_present")
+    if not present:
+        return True  # nothing to judge: the provider reported no listing
+    return all(any(chain.values()) for chain in present.values() if chain)
+
+
 def _ollama_models(settings: Settings) -> list[str]:
     from ollama import Client
 

@@ -17,7 +17,7 @@ from app.api.schemas import (
     UploadResponse,
 )
 from app.config import get_settings
-from app.llm.providers import check_llm_ready
+from app.llm.providers import any_model_present, check_llm_ready
 from app.observability.context import trace_id_var
 
 logger = logging.getLogger(__name__)
@@ -154,9 +154,16 @@ def health_dependencies() -> dict:
         "tabular": _check_writable(Path(settings.tabular_db_path).parent),
         "checkpointer": _check_checkpointer(settings),
     }
-    ok = checks["llm"].get("reachable") and all(
-        c.get("ok") for c in (checks["vector_store"], checks["tabular"],
-                              checks["checkpointer"])
+    # `reachable` alone only says the provider answered, so a chain of models
+    # that no longer exist reported `ok` -- which is how the retired
+    # `gemini-2.5-flash` default went unnoticed. Both are required now.
+    ok = (
+        checks["llm"].get("reachable")
+        and any_model_present(checks["llm"])
+        and all(
+            c.get("ok") for c in (checks["vector_store"], checks["tabular"],
+                                  checks["checkpointer"])
+        )
     )
     return {
         "status": "ok" if ok else "degraded",

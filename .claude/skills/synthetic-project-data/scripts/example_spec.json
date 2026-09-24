@@ -1,0 +1,231 @@
+{
+  "seed": 7,
+  "project": {
+    "name": "Apollo Core Banking Migration",
+    "code": "APL-2026",
+    "client": "Meridian Bank (SEA)",
+    "manager": "Rachel Tan",
+    "sponsor": "Daniel Oyelaran, COO",
+    "finance_contact": "P. Nallathamby",
+    "currency": "SGD",
+    "start_date": "2025-07-01",
+    "end_date": "2026-12-31"
+  },
+  "periods": ["2025-Q3", "2025-Q4", "2026-Q1", "2026-Q2"],
+  "financials": {
+    "formats": ["xlsx", "csv"],
+    "fiscal_label": "FY26",
+    "lines": [
+      {"cost_code": "LAB-01", "category": "Internal engineering", "vendor": "In-house",
+       "budget": 1850000,
+       "actuals": {"2025-Q3": 180000, "2025-Q4": 340000, "2026-Q1": 410000, "2026-Q2": 395000},
+       "note": "Two squads plus a shared platform team from Q4."},
+      {"cost_code": "LAB-02", "category": "Systems integrator", "vendor": "Northwind Consulting",
+       "budget": 1200000,
+       "actuals": {"2025-Q3": 150000, "2025-Q4": 280000, "2026-Q1": 320000, "2026-Q2": 300000},
+       "note": "T&M against SOW-4; rate card refreshed in January."},
+      {"cost_code": "SW-01", "category": "Core platform licences", "vendor": "Corelis Banking",
+       "budget": 640000,
+       "actuals": {"2025-Q3": 220000, "2025-Q4": 180000, "2026-Q1": 160000, "2026-Q2": 140000},
+       "note": "Overrun driven by the extra non-production environment."},
+      {"cost_code": "INF-01", "category": "Cloud infrastructure", "vendor": "Sembcorp Cloud Reseller",
+       "budget": 310000,
+       "actuals": {"2025-Q3": 22000, "2025-Q4": 41000, "2026-Q1": 58000, "2026-Q2": 66000},
+       "note": "Runs hot during parallel-run months."},
+      {"cost_code": "DAT-01", "category": "Data migration tooling", "vendor": "Confluex",
+       "budget": 180000,
+       "actuals": {"2025-Q3": 0, "2025-Q4": 45000, "2026-Q1": 62000, "2026-Q2": 38000},
+       "note": ""},
+      {"cost_code": "TRN-01", "category": "Training and change", "vendor": "Brightpath Learning",
+       "budget": 95000,
+       "actuals": {"2025-Q3": 0, "2025-Q4": 0, "2026-Q1": 12000, "2026-Q2": 34000},
+       "note": "Branch training starts ahead of cutover."},
+      {"cost_code": "CON-01", "category": "Contingency", "vendor": "",
+       "budget": 250000,
+       "actuals": {"2025-Q3": 0, "2025-Q4": 0, "2026-Q1": 0, "2026-Q2": 85000},
+       "note": "Drawn down for the second migration rehearsal."}
+    ],
+    "notes": [
+      {"date": "2025-11-04", "author": "P. Nallathamby",
+       "text": "Licence invoice for the additional UAT environment booked against SW-01 rather than INF-01."},
+      {"date": "2026-02-12", "author": "Finance Ops",
+       "text": "Northwind rate card increased 4% from 1 Jan; SOW-4 ceiling unchanged."},
+      {"date": "2026-05-20", "author": "R. Tan",
+       "text": "Contingency drawdown of 85k approved by the steering committee for rehearsal 2."}
+    ]
+  },
+  "risk_register": {
+    "format": "csv",
+    "version": "v3",
+    "risks": [
+      {"id": "R-001", "title": "Deposits data quality below migration threshold",
+       "description": "Legacy deposit records carry inconsistent customer identifiers - reconciliation fails for roughly 3% of accounts.",
+       "category": "Data", "likelihood": "High", "impact": "High", "owner": "Priya Raman",
+       "status": "Open", "mitigation": "Data remediation squad running weekly cleansing cycles against the golden source.",
+       "raised_date": "2025-08-14", "review_date": "2026-07-15", "exposure": 420000},
+      {"id": "R-002", "title": "Corelis release slips past cutover window",
+       "description": "Vendor roadmap places the 9.4 release two weeks before the planned cutover.",
+       "category": "Vendor", "likelihood": "Medium", "impact": "High", "owner": "Rachel Tan",
+       "status": "Open", "mitigation": "Contractual milestone added to SOW-4; fallback is cutover on 9.3 with a deferred upgrade.",
+       "raised_date": "2025-09-02", "review_date": "2026-07-01", "exposure": 380000},
+      {"id": "R-003", "title": "MAS notice 655 reporting not covered by the target state",
+       "description": "Regulatory reporting extract has no equivalent in the target platform.",
+       "category": "Regulatory", "likelihood": "Medium", "impact": "Very High", "owner": "Wei Lim",
+       "status": "Open", "mitigation": "Gap analysis with compliance completed; bespoke extract scoped for release 3.",
+       "raised_date": "2025-10-21", "review_date": "2026-08-01", "exposure": 500000},
+      {"id": "R-004", "title": "Single point of knowledge on the payments interface",
+       "description": "Only one engineer understands the ISO 20022 mapping layer.",
+       "category": "Resource", "likelihood": "High", "impact": "Medium", "owner": "Rachel Tan",
+       "status": "Open", "mitigation": "",
+       "raised_date": "2025-11-08", "review_date": "", "exposure": 260000},
+      {"id": "R-005", "title": "Parallel run infrastructure cost overrun",
+       "description": "Running both platforms through Q2 doubles the compute footprint.",
+       "category": "Financial", "likelihood": "High", "impact": "Medium", "owner": "P. Nallathamby",
+       "status": "Open", "mitigation": "Reserved instances purchased for the parallel-run months; nightly shutdown of non-prod.",
+       "raised_date": "2026-01-19", "review_date": "2026-07-10", "exposure": 140000},
+      {"id": "R-006", "title": "Branch staff readiness for cutover weekend",
+       "description": "Training completion is behind plan in the eastern branches.",
+       "category": "Change", "likelihood": "Medium", "impact": "Medium", "owner": "Nadia Hassan",
+       "status": "Open", "mitigation": "Additional weekend sessions scheduled; branch champions identified per site.",
+       "raised_date": "2026-02-03", "review_date": "2026-07-20", "exposure": 90000},
+      {"id": "R-007", "title": "Privileged access review overdue for migration accounts",
+       "description": "Service accounts created for migration have not been through the quarterly access review.",
+       "category": "Security", "likelihood": "Medium", "impact": "High", "owner": "Wei Lim",
+       "status": "Open", "mitigation": "Access review booked with the CISO office for July; accounts time-boxed to cutover plus 30 days.",
+       "raised_date": "2026-03-11", "review_date": "2026-07-05", "exposure": 210000},
+      {"id": "R-008", "title": "Interest accrual differences between platforms",
+       "description": "Rounding differs on term deposits, producing small but visible customer-facing variances.",
+       "category": "Technical", "likelihood": "Medium", "impact": "Medium", "owner": "Priya Raman",
+       "status": "Mitigated", "mitigation": "Rounding rules aligned in release 2 and confirmed across two rehearsals.",
+       "raised_date": "2025-12-01", "review_date": "2026-06-30", "exposure": 75000},
+      {"id": "R-009", "title": "Northwind key staff rotation",
+       "description": "Two senior integrator staff rolled off at the end of the last SOW period.",
+       "category": "Vendor", "likelihood": "Medium", "impact": "Medium", "owner": "Rachel Tan",
+       "status": "Closed", "mitigation": "Replacements onboarded in February with a four-week handover.",
+       "raised_date": "2025-09-30", "review_date": "2026-03-31", "exposure": 60000},
+      {"id": "R-010", "title": "Cutover rollback window shorter than rehearsal time",
+       "description": "Rehearsal 1 took 19 hours against a 14-hour rollback window.",
+       "category": "Schedule", "likelihood": "High", "impact": "Very High", "owner": "Marcus Chen",
+       "status": "Open", "mitigation": "Rehearsal 2 targeted parallelised data load; runbook re-sequenced to bring the critical path under 12 hours.",
+       "raised_date": "2026-04-02", "review_date": "2026-07-25", "exposure": 650000},
+      {"id": "R-011", "title": "Customer statement formatting differences",
+       "description": "Target platform statements differ in layout - complaints risk at first statement run.",
+       "category": "Change", "likelihood": "Low", "impact": "Medium", "owner": "Nadia Hassan",
+       "status": "Open", "mitigation": "Pre-cutover customer communication drafted with the marketing team.",
+       "raised_date": "2026-04-28", "review_date": "2026-08-15", "exposure": 45000},
+      {"id": "R-012", "title": "Third-party card switch certification lapses",
+       "description": "Certification with the card switch expires before the revised cutover date.",
+       "category": "Vendor", "likelihood": "Low", "impact": "High", "owner": "Marcus Chen",
+       "status": "Open", "mitigation": "Re-certification slot booked for August.",
+       "raised_date": "2026-05-14", "review_date": "2026-08-05", "exposure": 180000}
+    ]
+  },
+  "reports": [
+    {
+      "id": "PSR-2025-12",
+      "template": "classic",
+      "period": "2025-Q4",
+      "as_of": "2025-12-19",
+      "rag": "green",
+      "author": "Rachel Tan",
+      "distribution": ["Steering Committee", "COO Office", "Technology Leadership"],
+      "executive_summary": "Apollo closes the quarter on plan. The target platform is stood up in all non-production environments, the first two migration release candidates are through system test, and the integrator team reached full complement in November. Spend tracks slightly below profile because the training workstream starts later than planned. The main watch item is deposit data quality, where reconciliation is still failing for a small but stubborn share of accounts.",
+      "progress": [
+        "Target platform provisioned across development, system test and UAT, with the additional non-production environment agreed with Corelis.",
+        "Release 1 (customer and account master) passed system test with 94% of test cases green.",
+        "Data remediation squad stood up; first cleansing cycle reduced identifier mismatches from 5.1% to 3.4% of deposit accounts.",
+        "Integrator team at full complement following two onboardings in November."
+      ],
+      "milestones": [
+        {"name": "Environment build complete", "owner": "Marcus Chen", "due": "2025-10-31", "status": "complete", "comment": "Signed off 28 Oct."},
+        {"name": "Release 1 system test exit", "owner": "Priya Raman", "due": "2025-12-12", "status": "complete", "comment": "94% pass; 6 defects deferred."},
+        {"name": "Data remediation cycle 1", "owner": "Priya Raman", "due": "2025-12-05", "status": "complete", "comment": ""},
+        {"name": "Release 2 build start", "owner": "Marcus Chen", "due": "2026-01-12", "status": "in_progress", "comment": "On track."},
+        {"name": "Training material v1", "owner": "Nadia Hassan", "due": "2026-02-27", "status": "not_started", "comment": "Vendor contracted, kickoff in January."}
+      ],
+      "highlight_risks": ["R-001", "R-002", "R-003"],
+      "issues": [
+        "Corelis has not yet confirmed the 9.4 release date, which affects the cutover plan.",
+        "The additional UAT environment invoice was booked against the licence code rather than infrastructure, distorting the cost split."
+      ],
+      "next_period": [
+        "Complete release 2 build and enter system test.",
+        "Run the second data remediation cycle and re-baseline the reconciliation target.",
+        "Agree the cutover window with operations and the card switch provider."
+      ],
+      "budget_note": "Approved at the October investment committee.",
+      "forecast_note": "Assumes the training workstream lands in Q1."
+    },
+    {
+      "id": "PSR-2026-03",
+      "template": "memo",
+      "period": "2026-Q1",
+      "as_of": "2026-03-31",
+      "rag": "amber",
+      "author": "Rachel Tan",
+      "distribution": ["Steering Committee", "COO Office"],
+      "executive_summary": "The project moves to amber this quarter. Release 2 is in system test a fortnight later than planned, and the first cutover rehearsal ran nineteen hours against a fourteen-hour rollback window, which is the single biggest threat to the December date. Deposit data quality continues to improve. A regulatory gap on MAS Notice 655 reporting has been confirmed and scoped into release 3, which adds scope without adding budget.",
+      "progress": [
+        "Release 2 (deposits and term products) in system test, two weeks behind the plan agreed in December.",
+        "Cutover rehearsal 1 executed end to end; the runbook completed but exceeded the rollback window.",
+        "Compliance gap analysis for MAS Notice 655 completed with a bespoke extract scoped into release 3.",
+        "Branch training material signed off and pilot sessions run in two western branches."
+      ],
+      "milestones": [
+        {"name": "Release 2 system test entry", "owner": "Priya Raman", "due": "2026-02-16", "status": "slipped", "comment": "Entered 2 March."},
+        {"name": "Cutover rehearsal 1", "owner": "Marcus Chen", "due": "2026-03-14", "status": "complete", "comment": "Completed in 19h against a 14h window."},
+        {"name": "Training material v1", "owner": "Nadia Hassan", "due": "2026-02-27", "status": "complete", "comment": ""},
+        {"name": "MAS 655 extract design", "owner": "Wei Lim", "due": "2026-03-27", "status": "in_progress", "comment": "Design review booked for April."},
+        {"name": "Release 3 scope freeze", "owner": "Rachel Tan", "due": "2026-04-24", "status": "not_started", "comment": ""}
+      ],
+      "highlight_risks": ["R-010", "R-003", "R-004"],
+      "issues": [
+        "Rehearsal 1 exceeded the rollback window; a second rehearsal is needed before the cutover date can be confirmed.",
+        "Release 3 has absorbed regulatory scope with no corresponding budget change.",
+        "The payments interface remains dependent on a single engineer."
+      ],
+      "next_period": [
+        "Re-sequence the cutover runbook and rehearse again with a parallelised data load.",
+        "Freeze release 3 scope including the MAS 655 extract.",
+        "Cross-train a second engineer on the ISO 20022 mapping layer."
+      ]
+    },
+    {
+      "id": "PSR-2026-06",
+      "template": "table",
+      "period": "2026-Q2",
+      "as_of": "2026-06-30",
+      "rag": "amber",
+      "author": "Rachel Tan",
+      "distribution": ["Steering Committee", "COO Office", "Audit and Risk Committee"],
+      "executive_summary": "Apollo remains amber with a credible path back to green. The re-sequenced runbook brought cutover rehearsal 2 down to eleven hours, inside the rollback window, and release 2 completed user acceptance. Contingency was drawn down for the first time to fund the second rehearsal. Licence spend has now exceeded its line budget, offset by underspend in training and contingency at portfolio level. Cutover remains planned for the December window subject to card switch re-certification in August.",
+      "progress": [
+        "Cutover rehearsal 2 completed in 11 hours with the parallelised data load, inside the 14-hour rollback window.",
+        "Release 2 user acceptance signed off by deposits and branch operations.",
+        "Deposit reconciliation failures down to 1.2% of accounts after the third cleansing cycle.",
+        "Second engineer onboarded to the payments interface with a four-week shadowing plan."
+      ],
+      "milestones": [
+        {"name": "Cutover rehearsal 2", "owner": "Marcus Chen", "due": "2026-06-13", "status": "complete", "comment": "11h end to end."},
+        {"name": "Release 2 UAT sign-off", "owner": "Priya Raman", "due": "2026-06-26", "status": "complete", "comment": ""},
+        {"name": "Release 3 scope freeze", "owner": "Rachel Tan", "due": "2026-04-24", "status": "complete", "comment": "Frozen 30 April, six days late."},
+        {"name": "Card switch re-certification", "owner": "", "due": "2026-08-21", "status": "not_started", "comment": "Slot booked with the provider."},
+        {"name": "Cutover go/no-go", "owner": "Daniel Oyelaran", "due": "2026-11-27", "status": "not_started", "comment": ""}
+      ],
+      "highlight_risks": ["R-010", "R-012", "R-005", "R-007"],
+      "issues": [
+        "Licence spend has passed the SW-01 line budget; a virement from contingency is requested.",
+        "Card switch re-certification in August is on the critical path to the December cutover.",
+        "Privileged access review for migration service accounts is overdue."
+      ],
+      "next_period": [
+        "Complete card switch re-certification and confirm the cutover date.",
+        "Close the privileged access review with the CISO office.",
+        "Begin branch training at scale across the eastern region."
+      ],
+      "budget_note": "Includes the 85k contingency drawdown approved in May.",
+      "forecast_note": "Forecast assumes no third rehearsal is required."
+    }
+  ],
+  "flaws": "all"
+}

@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from app.config import Settings
 from app.llm.providers import (
+    any_model_present,
     check_llm_ready,
     get_embeddings,
     get_llm,
@@ -252,3 +253,49 @@ def test_the_last_error_surfaces_when_every_model_is_exhausted(chain_of):
 
     with pytest.raises(ClientError):
         get_structured_llm(RouteShape, settings.llm_models, settings).invoke("q")
+
+
+# --- Readiness must not report a model chain that cannot answer -------------
+# `reachable` only means the provider's listing call succeeded. It reported the
+# deployment healthy while every generation returned 404, because the retired
+# cloud defaults were still in Google's ListModels response.
+
+
+def test_a_chain_survives_one_missing_fallback():
+    """A chain exists so a missing fallback is survivable, not fatal."""
+    status = {"models_present": {"answering": {"good": True, "gone": False},
+                                 "routing": {"good": True}}}
+
+    assert any_model_present(status)
+
+
+def test_a_chain_with_nothing_present_is_not_ready():
+    status = {"models_present": {"answering": {"gone": False, "also-gone": False},
+                                 "routing": {"good": True}}}
+
+    assert not any_model_present(status)
+
+
+def test_readiness_is_not_judged_when_there_is_no_listing():
+    """An on-prem provider that reports no listing must not read as degraded."""
+    assert any_model_present({"reachable": True})
+
+
+def test_cloud_defaults_are_chains_with_a_fallback():
+    """A single default model has nothing to fall through to when it is
+    rate-limited, which on a free tier is the common case rather than the
+    exceptional one."""
+    cloud = Settings(deployment_mode="cloud", llm_api_key="k")
+
+    assert len(cloud.llm_models) > 1
+    assert len(cloud.router_models) > 1
+
+
+def test_no_chain_still_points_at_the_retired_2_5_models():
+    """`gemini-2.5-flash` and its lite variant answer generateContent with 404
+    while remaining in the provider's listing, so nothing catches them
+    automatically. Pin them here instead."""
+    cloud = Settings(deployment_mode="cloud", llm_api_key="k")
+
+    retired = {"gemini-2.5-flash", "gemini-2.5-flash-lite"}
+    assert not retired & set(cloud.llm_models + cloud.router_models)

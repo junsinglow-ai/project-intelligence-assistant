@@ -1,0 +1,24 @@
+{
+  "skill_name": "synthetic-project-data",
+  "note": "Prompts only - these have not been run. Use skill-creator's eval loop to execute them with and without the skill.",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I'm building a RAG demo over project documents and data/raw is empty. Can you generate me some realistic sample data - a few project status reports as PDFs, a financial summary in CSV or Excel, and a risk register? It should have the kind of mess real project data has (missing fields, inconsistent date formats) so the ingestion pipeline actually gets exercised. Document what's deliberately broken.",
+      "expected_output": "2-3 status report PDFs with extractable text, a financial summary (XLSX and/or CSV), exactly one risk register, plus a manifest and a messiness table listing each intentional flaw and how the pipeline should handle it. Reports' financial figures agree with the financial summary.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "We need test fixtures for a hospital wing construction programme - three quarterly status reports (PDF), the cost tracker as xlsx, and a risk register. Make the register an xlsx too. One thing: I want a clean copy of the same dataset as well, so I can tell whether my parser is failing on the data or on my code.",
+      "expected_output": "A messy dataset and a --flaws none clean dataset from the same spec and seed, both in the construction domain, with the risk register as XLSX in both. Files parallel each other so they can be diffed.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "generate synthetic project data for a payments platform migration and wire it into this repo properly - data/scripts/generate_synthetic_data.py is still a stub and data/README.md has an empty messiness table that needs filling in. make data should work afterwards.",
+      "expected_output": "Dataset written to data/raw, data/README.md's file and messiness tables filled in with real rows (not appended as a separate doc), the generator stub replaced with something that actually regenerates the dataset from a committed spec, and an honest statement about where the renderer lives / what the make target depends on.",
+      "files": []
+    }
+  ]
+}

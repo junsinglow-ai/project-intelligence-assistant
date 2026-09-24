@@ -153,9 +153,13 @@ def test_blank_env_values_fall_back_to_defaults():
     would otherwise fail validation on every non-string field.
     """
     settings = Settings(llm_timeout_s="", llm_model="", top_k="", llm_api_key="k")
+    unset = Settings(llm_api_key="k")
 
     assert settings.llm_timeout_s == 60      # cloud mode default
-    assert settings.llm_model == "gemini-2.5-flash"
+    # Compared against an unset instance rather than a literal model name: the
+    # claim is that blank and absent resolve identically, and pinning the name
+    # here made this fail for the unrelated reason that a default moved.
+    assert settings.llm_model == unset.llm_model
     assert settings.top_k == 8               # declared default
 
 

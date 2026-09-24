@@ -52,8 +52,22 @@ def _model_chain(value: str) -> list[str]:
 _MODE_DEFAULTS: dict[str, dict[str, str | int]] = {
     "cloud": {
         "llm_provider": "google",
-        "llm_model": "gemini-2.5-flash",
-        "router_model": "gemini-2.5-flash-lite",
+        # Chains, not single models, because the free tier rate-limits by model
+        # and a demo that answers "quota exceeded" is a failed demo. Measured
+        # against a free-tier key on 2026-09-24: the full `flash` models are
+        # the ones that run out -- `gemini-3.8-flash`, `gemini-3.5-flash` and
+        # the `gemini-flash-latest` alias all returned 429 -- while the `lite`
+        # models answered every time in about a second. So each chain leads
+        # with the strongest model that actually answered and *ends* with a
+        # lite model, which is what makes the fallback worth having: the last
+        # entry has to be something that reliably works.
+        #
+        # `gemini-2.5-flash` and `gemini-2.5-flash-lite`, the previous
+        # defaults, now return 404 NOT_FOUND. They are still in the provider's
+        # ListModels response, so nothing catches that by listing alone -- see
+        # the note on `_any_present` in `app/llm/providers.py`.
+        "llm_model": "gemini-3.6-flash,gemini-3.5-flash,gemini-flash-lite-latest",
+        "router_model": "gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-flash-lite-latest",
         "llm_timeout_s": 60,
     },
     "onprem": {

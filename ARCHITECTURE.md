@@ -511,7 +511,27 @@ configuration:
   an argument for keeping `RERANK_TOP_N` small rather than feeding the model everything retrieved.
 
 This is why `LLM_TIMEOUT_S` defaults differ by mode, and why it is set as a safety net (600s) rather
-than a latency target. Cloud-mode answer latency is still to be measured against the hosted demo.
+than a latency target.
+
+**Cloud-mode latency, measured.** End-to-end `POST /v1/chat`, cloud mode against the free tier, with
+Qdrant and Redis as containers and `AGENT_MAX_TOOL_CALLS=3`:
+
+| Question | Agent | Tool calls | Wall clock |
+|---|---|---|---|
+| "hello" | `small_talk` | 0 | **6.8s** |
+| "What is the approved budget?" | `data_analysis` | 1–2 | **17.6s / 35.3s** |
+| "Summarise the main risks…" | `document_qa` | 1–2 | **40.1s / 79.4s** |
+
+The per-call figures above still hold — what the table misses is that a request is not one
+generation. Rewrite, route and each turn of the skill loop are separate calls, so a question
+answered in two searches is five generations and the wall clock is their sum. `small_talk` is the
+control: no skills, one generation, 6.8s. That is the floor, and everything above it is the loop.
+
+Two consequences for deployment. A request can exceed `LLM_TIMEOUT_S`, which is per-call rather than
+per-request, so the host's own request timeout has to be set well above it — Cloud Run is deployed
+at 300s against a 60s `LLM_TIMEOUT_S`. And `AGENT_MAX_TOOL_CALLS` is the latency knob in cloud mode
+just as it is on-prem, for the same reason: it bounds the number of generations, not the size of any
+one of them.
 
 **Resident memory is mode-invariant and now measured.** Everything except generation runs in
 process, so the footprint is the same in both modes and is set by the two ONNX models rather than by

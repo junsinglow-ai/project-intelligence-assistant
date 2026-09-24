@@ -11,6 +11,7 @@ An AI assistant that ingests project documents (PDF status reports, CSV/Excel fi
 - [DECISIONS.md](DECISIONS.md): log of key technical decisions and trade-offs
 - [eval/](eval/): RAGAS evaluation set and results
 - [data/](data/): synthetic sample data and the intentional messiness it contains
+- [docs/synthetic-data-skill.md](docs/synthetic-data-skill.md): how to change or regenerate that data with your own coding agent
 
 ## Repository layout
 

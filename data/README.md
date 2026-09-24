@@ -127,3 +127,6 @@ uv run --project backend --group data python data/scripts/render_dataset.py \
 
 `--list-flaws` on the same script prints the catalogue of the 20 flaws with the
 identifiers used in the table above.
+
+To change the corpus rather than just regenerate it - with Claude Code or any
+other coding agent - see [`docs/synthetic-data-skill.md`](../docs/synthetic-data-skill.md).
