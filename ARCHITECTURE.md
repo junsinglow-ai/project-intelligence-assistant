@@ -512,10 +512,14 @@ configuration:
 
 **Deployed cloud-mode latency is dominated by quota, not by the model.** Measured against the Cloud
 Run service on a free-tier key, the same question ranged from 11s to 143s depending only on how much
-of the daily allowance was left. The variable is how many models the chain has to walk past before
+of the per-minute allowance the preceding questions had used. The provider's limit is **15 requests
+per minute per model** (`GenerateRequestsPerMinutePerProjectPerModel-FreeTier`), which clears in
+seconds rather than at the end of a day. The variable is how many models the chain has to walk past before
 one answers, multiplied by every generation in the skill loop -- which is why the per-request memo
 in `app/llm/quota.py` and a low `LLM_MAX_RETRIES` matter more here than any per-call tuning. A demo
-session and a RAGAS run draw on the same daily allowance, so they cannot both be done on one key.
+models in the chain are three separate 15/min ceilings, so stepping sideways is cheaper than
+waiting a backoff out. A burst -- an evaluation run, or rapid manual testing -- can still outrun all
+three at once.
 
 This is why `LLM_TIMEOUT_S` defaults differ by mode, and why it is set as a safety net (600s) rather
 than a latency target.

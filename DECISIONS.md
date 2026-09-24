@@ -34,10 +34,15 @@ Each entry records what was decided, what else was considered, why, what trade-o
     went from 143s to 11-23s. The memo is scoped to the request rather than the process because
     quota windows reopen, and a process-wide one would keep using the weakest model long after the
     strongest recovered.
-  - *Trade-off accepted:* neither change creates quota. Once every model in the chain is exhausted
-    the request fails, quickly and with the provider's own error. On a free tier that is a question
-    of how many questions have been asked that day, not of configuration -- so a demo session and an
-    evaluation run compete for the same daily allowance.
+  - *What the limit actually is.* The provider's own error names it:
+    `GenerateRequestsPerMinutePerProjectPerModel-FreeTier`, **limit 15, `retryDelay` about 15
+    seconds**. A per-minute ceiling per model, not a daily allowance -- a burst of questions trips it
+    and it clears within seconds. That is what makes the chain the right primary defence: three
+    models are three separate 15/min ceilings, so stepping sideways costs less than waiting a
+    backoff out, which is the reasoning the old `LLM_MAX_RETRIES=6` default had backwards.
+  - *Trade-off accepted:* neither change creates capacity. A burst large enough to trip every model
+    at once still fails, quickly and with the provider's own error. Sustained load is a paid-tier
+    question, not a configuration one.
 - **Alternatives considered:** Groq free tier (fastest hosted inference and a viable cloud swap, but
   serves no embedding models); OpenRouter free models (widest selection behind one key, rejected for
   unpredictable availability — a demo failure would look like a defect in this system); vLLM or TGI
@@ -492,10 +497,12 @@ Each entry records what was decided, what else was considered, why, what trade-o
   exposed as `Settings.llm_models` / `Settings.router_models`. When a model fails with a
   provider-side error the next one in the chain answers instead. `LLM_MAX_RETRIES` (default 6, the
   hosted provider's own) is spent on each model before the chain advances, so a per-minute limit is
-  waited out and only a durable failure — a spent daily quota — costs quality. A name with no comma
-  disables fallback and is the pre-chain behaviour exactly.
-- **Alternatives considered:** A single model plus more retries (does nothing once a daily quota is
-  spent); returning `RunnableWithFallbacks` from `get_llm()` (rejected — it is not a `BaseChatModel`,
+  waited out and only a durable failure costs quality. A name with no comma disables fallback and is
+  the pre-chain behaviour exactly. *(Amended 2026-09-24: measured, this had the trade-off backwards
+  and the default is now 2 — see the amendment above. The free-tier limit is per minute per model,
+  so the chain steps sideways to an untouched ceiling faster than any backoff waits one out.)*
+- **Alternatives considered:** A single model plus more retries (waits out the per-minute ceiling
+  instead of stepping to another model's, which measured far slower); returning `RunnableWithFallbacks` from `get_llm()` (rejected — it is not a `BaseChatModel`,
   so it has neither `with_structured_output` nor `bind_tools`, and both the router and every agent
   tool loop need one of those); a `list[str]` settings field (rejected — pydantic-settings parses a
   complex-typed field from the environment as JSON, so `LLM_MODEL=a,b` would fail to load and only

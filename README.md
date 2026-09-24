@@ -10,9 +10,9 @@ An AI assistant that ingests project documents (PDF status reports, CSV/Excel fi
 >
 > Frontend on Vercel, backend on Cloud Run with Qdrant Cloud and Redis Cloud behind it — all inside
 > free tiers (DECISIONS.md D-009). The backend scales to zero, so the first request after an idle
-> period waits for a cold start. Generation runs on Gemini's free tier, whose daily quota a long
-> demo session can exhaust; the model chain then falls through to a smaller model and, once every
-> model is spent, answers stop until the quota resets.
+> period waits for a cold start. Generation runs on Gemini's free tier, which allows 15 requests
+> per minute per model; asking questions in quick succession trips it, the model chain falls through
+> to the next model, and the limit clears within seconds.
 
 ## Documentation
 

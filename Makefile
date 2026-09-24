@@ -16,7 +16,8 @@ CLOUD_ENV ?= .env.cloud
 .PHONY: help env up up-onprem down restart build rebuild logs logs-backend logs-frontend ps \
         qdrant redis ready models ingest reindex query sql shell-backend shell-frontend clean install dev-backend dev-frontend test \
         data eval lock upgrade ingest-cloud reindex-cloud ready-cloud \
-        deploy-setup deploy-backend deploy-url deploy-check
+        deploy-setup deploy-backend deploy-url deploy-check \
+        logs-cloud logs-cloud-errors logs-cloud-trace
 
 help: ## Show available targets
 	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -279,6 +280,32 @@ deploy-url: ## Print the deployed backend URL
 	@$(load_cloud_env); $(require_gcp); \
 	gcloud run services describe $(CLOUD_RUN_SERVICE) \
 		--project "$$GCP_PROJECT" --region "$$GCP_REGION" --format 'value(status.url)'
+
+# `gcloud logging tail` needs grpc extras that the standard SDK install does not
+# ship, so these read rather than stream. LOG_FRESHNESS bounds the window;
+# without it a query scans far further back than it needs to.
+LOG_FRESHNESS ?= 1h
+LOG_LIMIT ?= 50
+
+logs-cloud: ## Recent request logs from the deployed backend
+	@$(load_cloud_env); $(require_gcp); \
+	gcloud run services logs read $(CLOUD_RUN_SERVICE) \
+		--project "$$GCP_PROJECT" --region "$$GCP_REGION" --limit $(LOG_LIMIT)
+
+logs-cloud-errors: ## Only failures from the deployed backend
+	@$(load_cloud_env); $(require_gcp); \
+	gcloud logging read \
+		'resource.type=cloud_run_revision AND resource.labels.service_name=$(CLOUD_RUN_SERVICE) AND severity>=ERROR' \
+		--project "$$GCP_PROJECT" --limit $(LOG_LIMIT) --freshness=$(LOG_FRESHNESS) \
+		--format='table(timestamp, jsonPayload.msg, jsonPayload.agent, jsonPayload.trace_id, jsonPayload.error)'
+
+logs-cloud-trace: ## Every line for one request: make logs-cloud-trace T=<trace_id>
+	@test -n "$(T)" || { echo 'usage: make logs-cloud-trace T=<trace_id>'; exit 1; }
+	@$(load_cloud_env); $(require_gcp); \
+	gcloud logging read \
+		'resource.type=cloud_run_revision AND jsonPayload.trace_id="$(T)"' \
+		--project "$$GCP_PROJECT" --limit 200 --freshness=$(LOG_FRESHNESS) --order=asc \
+		--format='table(timestamp, jsonPayload.level, jsonPayload.msg)'
 
 deploy-check: ## Probe the deployed backend's readiness endpoint
 	@url=$$($(MAKE) -s deploy-url); echo "$$url"; \
