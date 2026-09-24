@@ -60,6 +60,14 @@ def get_checkpointer() -> BaseCheckpointSaver:
 
     return AsyncRedisSaver(
         settings.redis_url,
+        # Seconds. The default is short enough that a managed Redis in another
+        # region fails a request outright, and a read timeout happens well
+        # after `ensure_checkpointer_ready` could have degraded to the
+        # in-process saver, so it surfaces as a failed answer (D-017).
+        connection_args={
+            "socket_timeout": settings.redis_timeout_s,
+            "socket_connect_timeout": settings.redis_timeout_s,
+        },
         # Minutes, and refreshed whenever the thread is read, so the TTL expires
         # abandoned conversations rather than long ones.
         ttl={"default_ttl": settings.checkpoint_ttl_minutes, "refresh_on_read": True},

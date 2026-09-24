@@ -200,6 +200,16 @@ class Settings(BaseSettings):
     # evicts them: that store is process-local, so its eviction cannot be the
     # only thing reclaiming keys from a Redis that outlives the process.
     checkpoint_ttl_minutes: int = 120
+    # Socket timeout for checkpoint reads and writes. Generous because the
+    # store is frequently not next to the application: a managed Redis in
+    # another region turns every checkpoint operation into an inter-continental
+    # round trip, and the graph makes several per request. Measured 2026-09-24
+    # with the service in us-central1 and the database in europe-west3, a
+    # document question died on `TimeoutError: Timeout reading from ...` rather
+    # than degrading -- a runtime read is past the point where
+    # `ensure_checkpointer_ready` can fall back to the in-process saver.
+    # Colocating the two is the real fix; this stops the latency being fatal.
+    redis_timeout_s: int = 30
 
     # --- Tabular analysis (mode-invariant) ---
     tabular_db_path: str = "./data/processed/tables.duckdb"
