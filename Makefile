@@ -8,9 +8,9 @@ BACKEND := backend
 FRONTEND := frontend
 
 .DEFAULT_GOAL := help
-.PHONY: help env up down restart build rebuild logs logs-backend logs-frontend ps \
-        shell-backend shell-frontend clean install dev-backend dev-frontend test \
-        data eval lock upgrade
+.PHONY: help env up up-onprem down restart build rebuild logs logs-backend logs-frontend ps \
+        qdrant redis ready models ingest reindex query sql shell-backend shell-frontend clean install dev-backend dev-frontend test \
+        data eval lock upgrade deploy-setup deploy-backend deploy-url deploy-check
 
 help: ## Show available targets
 	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -28,9 +28,16 @@ up: env ## Build if needed and start the stack in the background
 	$(COMPOSE) up -d --build
 	@echo "Backend:  http://localhost:8000  (API docs at /docs)"
 	@echo "Frontend: http://localhost:5173"
+	@echo "Qdrant:   http://localhost:6333/dashboard"
+	@echo "Redis:    localhost:6379  (graph checkpoints)"
+
+up-onprem: env ## Start the stack in on-premises mode, with a local Ollama container
+	DEPLOYMENT_MODE=onprem $(COMPOSE) --profile onprem up -d --build
+	@echo "Ollama:   http://localhost:11434  (run 'make models' to pull the models)"
+	@echo "Backend:  http://localhost:8000  (readiness at /v1/health/dependencies)"
 
 down: ## Stop the stack
-	$(COMPOSE) down
+	$(COMPOSE) --profile onprem down
 
 restart: down up ## Restart the stack
 
@@ -52,13 +59,51 @@ logs-frontend: ## Follow frontend logs
 ps: ## Show container status
 	$(COMPOSE) ps
 
+# The vector store is a container even when the rest of the stack runs from the
+# host, so `make dev-backend` and `make ingest` have an index to talk to.
+qdrant: ## Start only the Qdrant service (for local development)
+	$(COMPOSE) up -d qdrant
+	@echo "Qdrant:   http://localhost:6333/dashboard"
+
+# Same reason as `make qdrant`: `make dev-backend` checkpoints into this. Blank
+# REDIS_URL in .env to run with no container at all.
+redis: ## Start only the Redis service (for local development)
+	$(COMPOSE) up -d redis
+	@echo "Redis:    localhost:6379  (graph checkpoints)"
+
+ready: ## Report LLM, vector store, DuckDB and checkpointer readiness, and the resolved mode
+	@curl -fsS http://localhost:8000/v1/health/dependencies \
+		| python3 -m json.tool || echo "Backend not reachable on :8000"
+
+models: ## Pull the on-prem models onto the configured Ollama host
+	@uv run --directory $(BACKEND) python -c "$$PULL_MODELS"
+
+# These write to whatever QDRANT_URL points at -- by default the Qdrant
+# container, which `make up` or `make qdrant` starts -- so the stack can stay
+# running. In embedded mode (blank QDRANT_URL) the directory lock applies
+# instead and the API must be stopped first.
+ingest: ## Index every document in data/raw into the running Qdrant
+	@uv run --directory $(BACKEND) python -c "$$INGEST"
+
+reindex: ## Drop the index and rebuild it (required after EMBEDDING_MODEL changes)
+	@uv run --directory $(BACKEND) python -c "$$REINDEX"
+
+query: ## Retrieve chunks for a question: make query Q="which risk is largest?"
+	@Q="$(Q)" uv run --directory $(BACKEND) python -c "$$QUERY"
+
+sql: ## Query the structured store read-only: make sql S="select * from risk_register"
+	@S="$(S)" uv run --directory $(BACKEND) python -c "$$SQL"
+
 shell-backend: ## Open a shell in the backend container
 	$(COMPOSE) exec backend bash
 
 shell-frontend: ## Open a shell in the frontend container
 	$(COMPOSE) exec frontend sh
 
-clean: ## Stop the stack and remove its volumes and locally built images
+# -v removes the Qdrant storage volume, so this discards the index; `make
+# ingest` rebuilds it. It also discards the Redis checkpoints, which nothing
+# needs to rebuild.
+clean: ## Stop the stack and remove its volumes (including the index) and local images
 	$(COMPOSE) down -v --rmi local --remove-orphans
 
 # --- Local development ----------------------------------------------------
@@ -76,15 +121,143 @@ dev-frontend: ## Run the Vite dev server on :5173
 test: ## Run the backend test suite
 	uv run --directory $(BACKEND) pytest
 
-# Scripts live at the repo root but run against the backend environment.
+# Scripts live at the repo root but run against the backend environment; the
+# rendering libraries are in the backend's optional `data` dependency group.
 data: ## Regenerate the synthetic sample documents in data/raw
-	uv run --project $(BACKEND) python data/scripts/generate_synthetic_data.py
+	uv run --project $(BACKEND) --group data python data/scripts/generate_synthetic_data.py
 
 eval: ## Run the RAGAS evaluation into eval/results
 	uv run --project $(BACKEND) python eval/run_ragas.py
+
+# --- Deployment (DECISIONS.md D-009) --------------------------------------
+# Backend on Cloud Run, frontend on Vercel, with Qdrant Cloud and Redis Cloud
+# behind them. GCP_PROJECT and GCP_REGION come from the environment; the region
+# must be one of the three the Cloud Run free tier covers.
+GCP_REGION ?= us-central1
+CLOUD_RUN_SERVICE ?= project-intelligence-backend
+
+IMAGE = $(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT)/$(CLOUD_RUN_SERVICE)/backend:latest
+
+deploy-setup: ## One-time: create the Artifact Registry repo and the two secrets
+	@test -n "$(GCP_PROJECT)" || { echo "GCP_PROJECT is not set"; exit 1; }
+	gcloud artifacts repositories create $(CLOUD_RUN_SERVICE) \
+		--project $(GCP_PROJECT) --location $(GCP_REGION) --repository-format docker \
+		|| echo "repository already exists, continuing"
+	@echo "Now create the secrets (reads from stdin, so nothing lands in your shell history):"
+	@echo "  printf %s \"\$$GEMINI_KEY\" | gcloud secrets create llm-api-key    --project $(GCP_PROJECT) --data-file=-"
+	@echo "  printf %s \"\$$QDRANT_KEY\" | gcloud secrets create qdrant-api-key --project $(GCP_PROJECT) --data-file=-"
+
+deploy-backend: ## Build and deploy the backend image to Cloud Run
+	@test -n "$(GCP_PROJECT)" || { echo "GCP_PROJECT is not set"; exit 1; }
+	@case "$(GCP_REGION)" in us-central1|us-east1|us-west1) ;; \
+		*) echo "GCP_REGION=$(GCP_REGION) is outside the free tier (us-central1|us-east1|us-west1)"; exit 1 ;; esac
+	@test -n "$(QDRANT_URL)" || { echo "QDRANT_URL is not set - the deployed backend needs the Qdrant Cloud cluster"; exit 1; }
+	@test -f data/processed/tables.duckdb || { echo "data/processed/tables.duckdb is missing - run 'make ingest' first"; exit 1; }
+	gcloud builds submit --project $(GCP_PROJECT) --config cloudbuild.yaml \
+		--substitutions _IMAGE=$(IMAGE) .
+	@# `^##^` is gcloud's alternate delimiter: CORS_ORIGINS is itself a
+	@# comma-separated list, so the default comma separator would split it
+	@# into several malformed variables.
+	gcloud run deploy $(CLOUD_RUN_SERVICE) \
+		--project $(GCP_PROJECT) --region $(GCP_REGION) \
+		--image $(IMAGE) --port 8080 \
+		--memory 1Gi --cpu 1 --min-instances 0 --max-instances 2 \
+		--cpu-boost --timeout 300 --concurrency 4 \
+		--allow-unauthenticated \
+		--set-env-vars "^##^DEPLOYMENT_MODE=cloud##QDRANT_URL=$(QDRANT_URL)##REDIS_URL=$(REDIS_URL)##CORS_ORIGINS=$(CORS_ORIGINS)" \
+		--set-secrets "LLM_API_KEY=llm-api-key:latest,QDRANT_API_KEY=qdrant-api-key:latest"
+
+deploy-url: ## Print the deployed backend URL
+	@gcloud run services describe $(CLOUD_RUN_SERVICE) \
+		--project $(GCP_PROJECT) --region $(GCP_REGION) --format 'value(status.url)'
+
+deploy-check: ## Probe the deployed backend's readiness endpoint
+	@url=$$($(MAKE) -s deploy-url); echo "$$url"; \
+		curl -fsS "$$url/v1/health/dependencies" | python3 -m json.tool
 
 lock: ## Re-resolve backend dependencies into uv.lock
 	uv lock --directory $(BACKEND)
 
 upgrade: ## Upgrade backend dependencies within their declared bounds
 	uv lock --directory $(BACKEND) --upgrade
+
+# --- On-prem model provisioning -------------------------------------------
+# Resolves the models from Settings rather than duplicating them here, so the
+# on-prem defaults live in exactly one place (backend/app/config.py). Uses the
+# ollama Python client, already a backend dependency, so this works against any
+# host without the ollama CLI installed.
+define PULL_MODELS
+import sys
+from ollama import Client
+from app.config import Settings
+
+settings = Settings(deployment_mode="onprem")
+client = Client(host=settings.ollama_base_url, timeout=600)
+print(f"Ollama host: {settings.ollama_base_url}")
+for model in (settings.llm_model, settings.router_model):
+    print(f"  pulling {model} ...", flush=True)
+    try:
+        client.pull(model)
+    except Exception as exc:
+        sys.exit(f"  failed: {type(exc).__name__}: {exc}")
+print("Done. Check with: make ready")
+endef
+export PULL_MODELS
+
+# --- Ingestion ------------------------------------------------------------
+define INGEST
+import json
+from app.ingestion.pipeline import ingest_directory
+print(json.dumps(ingest_directory().as_dict(), indent=2))
+endef
+export INGEST
+
+# Vector dimensions differ between embedding models, so an index built with one
+# cannot be reused by another; this is the documented recovery.
+define REINDEX
+import json
+from app.config import get_settings
+from app.ingestion.pipeline import ingest_directory
+from app.retrieval import vectorstore
+settings = get_settings()
+print(f"dropping collection {settings.collection_name}")
+vectorstore.drop_collection(settings)
+print(json.dumps(ingest_directory(settings=settings).as_dict(), indent=2))
+endef
+export REINDEX
+
+# --- Inspection -----------------------------------------------------------
+# Exercise retrieval and the structured store directly, without going through
+# `/v1/chat` -- useful for checking what an agent was given, not just what it said.
+define QUERY
+import os, sys
+from app.config import get_settings
+from app.retrieval.hybrid import retrieve
+question = os.environ.get("Q") or sys.exit('usage: make query Q="your question"')
+settings = get_settings()
+print(f'mode={settings.retrieval_mode} rerank={settings.rerank_enabled} top_k={settings.top_k}\n')
+for hit in retrieve(question, settings):
+    print(f"{hit.score:7.3f}  {hit.source}")
+    print(f"         {hit.citation}")
+    for line in hit.text.splitlines()[:4]:
+        print(f"         | {line[:100]}")
+    print()
+endef
+export QUERY
+
+define SQL
+import os, sys
+from app.ingestion.tabular_store import list_tables, read_only_connection
+statement = os.environ.get("S")
+if statement:
+    with read_only_connection() as connection:
+        connection.sql(statement).show()
+else:
+    tables = list_tables()
+    if not tables:
+        sys.exit("No tables yet - run `make ingest` first.")
+    for name, columns in tables.items():
+        print(f"{name}: {', '.join(columns)}")
+    print('\nusage: make sql S="select ..."')
+endef
+export SQL

@@ -1,0 +1,17 @@
+# Builds the backend image for Cloud Run (DECISIONS.md D-009).
+#
+# `gcloud run deploy --source` expects a Dockerfile at the root of the source
+# directory, but this one lives in backend/ while its build context is the
+# repository root -- the image bakes in ./data, which sits outside backend/.
+# This config keeps the Dockerfile where it belongs and still builds with the
+# right context.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-f", "backend/Dockerfile", "-t", "${_IMAGE}", "."]
+images: ["${_IMAGE}"]
+options:
+  logging: CLOUD_LOGGING_ONLY
+  # The ONNX warm-up step downloads ~150MB; the default machine is fine but
+  # the build is slower than a pure dependency install.
+  machineType: E2_HIGHCPU_8
+timeout: 1200s

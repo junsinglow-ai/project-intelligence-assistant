@@ -1,0 +1,36 @@
+# Fallback deployment, kept for the case where attaching a billing account to
+# GCP is not an option. Cloud Run is the primary target -- see DECISIONS.md
+# D-009 for why, and `make deploy-backend`.
+#
+# The trade-off Render's free tier imposes: 512MB against a measured 348MB
+# warm footprint, and 0.1 vCPU for a request that runs an ONNX embedding and a
+# cross-encoder re-rank. It also spins down after 15 minutes idle, so the
+# first request after a quiet period waits for a cold start.
+services:
+  - type: web
+    name: project-intelligence-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .          # the image bakes in ./data, outside backend/
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: DEPLOYMENT_MODE
+        value: cloud
+      # Qdrant and Redis stay external so the deployment keeps the topology
+      # D-003 and D-017 describe rather than falling back to embedded mode.
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: LLM_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      # Each skill call is another generation, so on a 0.1 vCPU instance the
+      # default of 3 risks the request outliving the client's patience.
+      - key: AGENT_MAX_TOOL_CALLS
+        value: "1"

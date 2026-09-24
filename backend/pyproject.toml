@@ -10,15 +10,48 @@ dependencies = [
     "python-multipart>=0.0.32",
     "langchain>=1.4.2",
     "langchain-core>=1.6.4",
-    # Add provider, vector store, parsing and RAGAS packages once the stack is locked.
+    # Orchestration: the request is one LangGraph state graph and each agent is a
+    # create_agent tool loop over its skills. Already resolved transitively via
+    # langchain; declared because the code imports it directly (D-015).
+    "langgraph>=1.2.12",
+    # LLM providers. Both ship in every image: the cloud/on-prem switch is
+    # configuration (DEPLOYMENT_MODE), not a different build. See DECISIONS.md D-010.
+    "langchain-google-genai>=4.4.0",
+    "langchain-ollama>=1.1.0",
+    # Embeddings, vector store, keyword search and re-ranking all run in-process
+    # and are identical in both modes -- that is what keeps the switch to one knob.
+    "fastembed>=0.8.0",            # ONNX; deliberately no torch (D-002)
+    "qdrant-client>=1.19.1",
+    "langchain-qdrant>=1.1.0",
+    "rank-bm25>=0.2.2",
+    "flashrank>=0.2.10",
+    # Ingestion and tabular analysis.
+    "pdfplumber>=0.11.10",
+    "pandas>=3.0.6",
+    "openpyxl>=3.1.5",
+    "duckdb>=1.5.5",
+    # Graph checkpointing. Ships in every image for the same reason both LLM
+    # providers do: REDIS_URL chooses between Redis and the in-process saver at
+    # startup, not at build time (D-017).
+    "langgraph-checkpoint-redis>=0.5.2",
 ]
 
 # Installed by `uv sync`; the Docker image builds with `--no-dev`.
-# RAGAS and synthetic-data tooling belong in their own groups here.
+# `data` and `eval` are non-default groups, so RAGAS (and the openai client it
+# pulls in transitively) never reach the runtime image.
 [dependency-groups]
+data = [
+    "openpyxl>=3.1.5",
+    "reportlab>=5.0.1",
+]
 dev = [
     "pytest>=9.1.1",
     "httpx>=0.28.1",
+    "pytest-asyncio>=1.4.0",
+]
+eval = [
+    "datasets>=5.0.1",
+    "ragas>=0.4.3",
 ]
 
 # The app is run as a module from this directory, not installed as a package.
@@ -28,3 +61,15 @@ package = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+# Agents are async, so their tests are too. `auto` avoids decorating every one
+# of them; the explicit fixture loop scope silences pytest-asyncio's 1.x warning.
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+# `slow` covers tests that load the local ONNX embedding model, which is
+# downloaded once (~150MB) on first run. Skip with `-m "not slow"` offline.
+markers = [
+    "slow: loads local model weights",
+    # Skipped automatically when nothing answers at REDIS_TEST_URL, so the
+    # suite still passes with no container; `-m redis` runs only these.
+    "redis: needs a running Redis (REDIS_TEST_URL, default redis://localhost:6379/0)",
+]

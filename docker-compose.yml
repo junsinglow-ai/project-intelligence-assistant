@@ -1,12 +1,83 @@
 services:
+  # Vector store. Pinned to the same minor as the `qdrant-client` in
+  # backend/pyproject.toml, so client and server move together.
+  qdrant:
+    image: qdrant/qdrant:v1.19.1
+    environment:
+      # Blank leaves the server unauthenticated, which is what local
+      # development wants. Setting QDRANT_API_KEY in .env locks the server and
+      # authenticates the backend with the same value -- one variable, both
+      # sides.
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:-}
+    ports:
+      # Published so host-side tooling (`make ingest`, `make query`) writes to
+      # the same index the stack serves from.
+      - "6333:6333"
+    volumes:
+      - qdrant-storage:/qdrant/storage
+    healthcheck:
+      # The image ships no curl or wget, so this is bash's /dev/tcp. /readyz
+      # stays unauthenticated when QDRANT_API_KEY is set, so the probe needs no
+      # key, and it reports shard readiness rather than just an open port.
+      test: ["CMD", "bash", "-c", 'exec 3<>/dev/tcp/127.0.0.1/6333; printf "GET /readyz HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3; grep -q "200 OK" <&3']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Graph checkpoints. Pinned to a Redis 8 image because the LangGraph saver
+  # queries through RediSearch indices, which Redis 8 ships in core -- an older
+  # server without the query engine fails at `asetup()`, not at connect.
+  redis:
+    image: redis:8.10-alpine
+    ports:
+      # Published so host-side tooling and `make dev-backend` checkpoint into
+      # the same store the stack serves from, as with qdrant above.
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
   backend:
-    build: ./backend
+    build:
+      # Context is the repository root, not ./backend: the image bakes in
+      # ./data (the corpus and the DuckDB tables) so it can run on a host with
+      # no volume to mount. .dockerignore keeps the rest of the tree out.
+      context: .
+      dockerfile: backend/Dockerfile
     env_file: .env
+    environment:
+      # The DuckDB file lives under the mounted data volume so it survives
+      # container restarts; the vector index lives in the qdrant service.
+      DATA_RAW_DIR: /app/data/raw
+      UPLOAD_DIR: /app/data/uploads
+      TABULAR_DB_PATH: /app/data/processed/tables.duckdb
+      # .env points host tooling at localhost:6333; inside the Compose network
+      # the same server answers to its service name. Drop this line to fall
+      # back to the embedded store at QDRANT_PATH below.
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_PATH: /app/data/qdrant
+      # Same pattern: .env points host tooling at localhost:6379, and inside the
+      # Compose network the same server answers to its service name. Drop this
+      # line to checkpoint in-process instead (D-017).
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8000:8000"
     volumes:
       - ./data:/app/data
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
+      # /health is deliberately dependency-free so this stays fast; use
+      # /v1/health/dependencies to check the LLM, vector store, DuckDB and Redis.
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 5s
@@ -21,3 +92,24 @@ services:
       - "5173:80"
     depends_on:
       - backend
+
+  # On-prem LLM host, started only by `make up-onprem` (or
+  # `docker compose --profile onprem up`). The default cloud deployment does not
+  # run it, and an on-prem deployment pointing OLLAMA_BASE_URL at an existing
+  # internal machine does not need it either.
+  ollama:
+    profiles: ["onprem"]
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+
+volumes:
+  # The index survives `make down` and restarts; `make clean` removes it, after
+  # which `make ingest` rebuilds it.
+  qdrant-storage:
+  # Checkpoints survive a restart, which is the point of moving them off the
+  # in-process saver. They expire on their own after CHECKPOINT_TTL_MINUTES.
+  redis-data:
+  ollama-models:

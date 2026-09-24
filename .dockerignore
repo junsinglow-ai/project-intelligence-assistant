@@ -1,0 +1,45 @@
+# Build context for backend/Dockerfile is the repository root, so that the
+# image can bake in ./data. Everything the backend image does not need is
+# excluded here; frontend/.dockerignore covers the frontend's own context.
+
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+
+# Frontend, docs and tooling: not part of the backend image.
+frontend/
+docs/
+eval/
+Makefile
+README.md
+ARCHITECTURE.md
+DECISIONS.md
+CLAUDE.md
+docker-compose.yml
+
+# Python build and test artefacts.
+**/__pycache__
+**/*.py[cod]
+backend/.venv
+backend/.pytest_cache
+backend/tests
+**/.mypy_cache
+**/.ruff_cache
+**/*.egg-info
+
+# Data: data/raw (the corpus) and data/processed/tables.duckdb are deliberately
+# NOT excluded -- the image carries them. The rest is runtime state.
+data/qdrant/
+data/uploads/
+data/scripts/
+data/manifest.json
+data/MESSINESS.md
+data/README.md
+**/.~lock.*#
+
+.DS_Store
+.idea/
+.vscode/
+*.log

@@ -1,0 +1,11 @@
+cost_code,cost category,SUPPLIER,budget_usd,actual_to_date,variance,pct_spent,comments
+ENG-01,Platform engineering,In-house,2400000,1850000,550000,77%,Two squads: routing and billing.
+ENG-02,Reliability engineering,,780000,565000,215000,0.72,Grew after the May rate-limit incident.
+MOD-01,Provider token spend,Northstar / Corvus / Helion,1450000,1585000,"(135,000)",109%,Pass-through inference cost; pre-purchased credits expire quarterly.
+INF-01,Cloud and edge infrastructure,Stratus Cloud,420000,280000,140000,0.67,Second region added in Q3.
+OBS-01,Observability and analytics,Lumen Observability,165000,118000,47000,72%,
+SEC-01,Security and SOC 2 audit,Ardent Security,190000,130000,60000,0.68,Type I delivered in June; Type II window runs to November.
+VEN-01,Contract engineering,Northcape Labs,610000,535000,75000,88%,Ramping down through October.
+CON-01,Contingency,,$0.3M,120k,180000,0.40,Drawn down for the multi-region control plane.
+,TOTAL,,6315000,5183000,1132000,,
+

@@ -20,6 +20,13 @@ dist/
 # Runtime data (keep synthetic samples in data/raw committed)
 data/processed/*
 !data/processed/.gitkeep
+# Qdrant index in embedded mode (QDRANT_PATH). The default stack keeps the
+# index in the qdrant-storage Docker volume instead; rebuild with `make reindex`
+data/qdrant/
+# Uploaded documents; the committed corpus lives in data/raw
+data/uploads/
+# LibreOffice lock files, which appear beside an open spreadsheet in data/raw
+.~lock.*#
 storage/
 uploads/
 *.log
