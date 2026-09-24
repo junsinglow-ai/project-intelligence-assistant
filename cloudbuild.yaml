@@ -7,6 +7,11 @@
 # right context.
 steps:
   - name: gcr.io/cloud-builders/docker
+    # The builder runs classic `docker build`, which does not understand the
+    # `RUN --mount=type=cache` in backend/Dockerfile and fails the step with
+    # "the --mount option requires BuildKit". Local builds get BuildKit by
+    # default, so this only shows up here.
+    env: ["DOCKER_BUILDKIT=1"]
     args: ["build", "-f", "backend/Dockerfile", "-t", "${_IMAGE}", "."]
 images: ["${_IMAGE}"]
 options:

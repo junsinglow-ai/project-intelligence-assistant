@@ -1,0 +1,42 @@
+# What `gcloud builds submit` uploads as the build context.
+#
+# Written explicitly because gcloud's default is `#!include:.gitignore`, and
+# this repository's .gitignore excludes `data/processed/*` -- which silently
+# dropped `tables.duckdb` from the upload. The build still succeeded and the
+# deployed Data Analysis agent would have had no tables to query.
+#
+# .dockerignore still filters what reaches the image; this only bounds the
+# upload. Anything the image needs must survive BOTH.
+
+.git
+.gitignore
+.gcloudignore
+
+# Secrets. .env.cloud holds live credentials and must never be uploaded.
+.env
+.env.cloud
+
+# Not part of the backend image.
+frontend/
+docs/
+eval/
+data/scripts/
+
+# Build and test artefacts.
+**/__pycache__/
+**/*.py[cod]
+backend/.venv/
+backend/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+
+# Runtime state. `data/raw` and `data/processed/tables.duckdb` are deliberately
+# NOT excluded: the image bakes them in because a cloud host has no volume.
+data/qdrant/
+data/uploads/
+**/.~lock.*#
+
+.DS_Store
+.idea/
+.vscode/
+*.log

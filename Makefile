@@ -156,13 +156,24 @@ eval: ## Run the RAGAS evaluation into eval/results
 # it -- LLM_API_KEY, the chunking knobs -- still comes from `.env`.
 CLOUD_RUN_SERVICE ?= project-intelligence-backend
 
-# `set -a` exports every assignment the file makes, so the sourced values reach
-# both the Python process and gcloud.
+# `.env` is sourced first and `.env.cloud` layered on top, which is what makes
+# the split work: LLM_API_KEY and the chunking knobs come from `.env` while the
+# service endpoints come from `.env.cloud`. `set -a` exports every assignment so
+# the values reach both the Python process and gcloud.
+#
+# The mode-sensitive LLM knobs are then dropped unless `.env.cloud` names them.
+# Without that, a developer running on-prem locally would deploy with
+# LLM_PROVIDER=ollama exported into the build -- `.env` describes the local
+# stack, and none of it should follow a cloud target. Anything `.env.cloud`
+# sets explicitly is kept, so overriding a model for the deployment still works.
 define load_cloud_env
 env_file="$(CLOUD_ENV)"; \
 case "$$env_file" in /*) ;; *) env_file="./$$env_file" ;; esac; \
 test -f "$$env_file" || { echo "$(CLOUD_ENV) is missing - run 'make env' and fill it in"; exit 1; }; \
-set -a; . "$$env_file"; set +a; \
+set -a; if [ -f ./.env ]; then . ./.env; fi; . "$$env_file"; set +a; \
+for v in DEPLOYMENT_MODE LLM_PROVIDER LLM_MODEL ROUTER_MODEL LLM_TIMEOUT_S OLLAMA_BASE_URL; do \
+	grep -qE "^[[:space:]]*$$v=" "$$env_file" || unset "$$v"; \
+done; \
 : $${GCP_REGION:=us-central1}
 endef
 
@@ -188,31 +199,65 @@ ready-cloud: ## Resolve config against the managed services, without deploying
 	@$(load_cloud_env); \
 	uv run --directory $(BACKEND) python -c "$$READY_CLOUD"
 
-deploy-setup: ## One-time: create the Artifact Registry repo and the two secrets
+# Ordering matters and is easy to get backwards: creating the repository before
+# the Artifact Registry API is enabled fails with SERVICE_DISABLED, and an
+# `|| echo "already exists"` fallback then reports that failure as success --
+# which is exactly how the first run left no repository behind while printing
+# "ready". `describe || create` distinguishes the two cases properly, and
+# `set -e` stops the target at the first real failure.
+#
+# The IAM grant is not optional on a fresh project. Google no longer creates the
+# legacy `cloudbuild.gserviceaccount.com` account, so builds run as the Compute
+# Engine default service account, which starts with no build roles -- and
+# `gcloud builds submit` then fails reading its own staging bucket with a 403 on
+# storage.objects.get.
+#
+# The same account is Cloud Run's default runtime identity, and it needs
+# secretmanager.secretAccessor as well or the revision never becomes ready:
+# Cloud Run resolves --set-secrets when it starts the container, so a missing
+# grant fails at revision creation rather than at deploy time. Bound per
+# secret rather than project-wide, which is the narrower grant.
+deploy-setup: ## One-time: enable the APIs, create the registry and both secrets
 	@$(load_cloud_env); $(require_gcp); \
-	gcloud artifacts repositories create $(CLOUD_RUN_SERVICE) \
-		--project "$$GCP_PROJECT" --location "$$GCP_REGION" --repository-format docker \
-		|| echo "repository already exists, continuing"; \
+	set -e; \
+	echo "enabling APIs (first run takes a couple of minutes)..."; \
 	gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
 		artifactregistry.googleapis.com secretmanager.googleapis.com \
 		--project "$$GCP_PROJECT"; \
-	printf %s "$$LLM_API_KEY" | gcloud secrets create llm-api-key \
-		--project "$$GCP_PROJECT" --data-file=- 2>/dev/null \
-		|| printf %s "$$LLM_API_KEY" | gcloud secrets versions add llm-api-key \
-			--project "$$GCP_PROJECT" --data-file=-; \
-	printf %s "$$QDRANT_API_KEY" | gcloud secrets create qdrant-api-key \
-		--project "$$GCP_PROJECT" --data-file=- 2>/dev/null \
-		|| printf %s "$$QDRANT_API_KEY" | gcloud secrets versions add qdrant-api-key \
-			--project "$$GCP_PROJECT" --data-file=-; \
-	echo "Artifact Registry, APIs and secrets ready in $$GCP_PROJECT"
+	gcloud artifacts repositories describe $(CLOUD_RUN_SERVICE) \
+		--project "$$GCP_PROJECT" --location "$$GCP_REGION" >/dev/null 2>&1 \
+		|| gcloud artifacts repositories create $(CLOUD_RUN_SERVICE) \
+			--project "$$GCP_PROJECT" --location "$$GCP_REGION" --repository-format docker; \
+	num=$$(gcloud projects describe "$$GCP_PROJECT" --format='value(projectNumber)'); \
+	builder="$$num-compute@developer.gserviceaccount.com"; \
+	echo "granting build roles to $$builder"; \
+	gcloud projects add-iam-policy-binding "$$GCP_PROJECT" \
+		--member="serviceAccount:$$builder" \
+		--role=roles/cloudbuild.builds.builder --condition=None >/dev/null; \
+	for pair in "llm-api-key:$$LLM_API_KEY" "qdrant-api-key:$$QDRANT_API_KEY"; do \
+		name="$${pair%%:*}"; value="$${pair#*:}"; \
+		test -n "$$value" || { echo "$$name has no value in $(CLOUD_ENV)"; exit 1; }; \
+		gcloud secrets describe "$$name" --project "$$GCP_PROJECT" >/dev/null 2>&1 \
+			|| gcloud secrets create "$$name" --project "$$GCP_PROJECT" --replication-policy=automatic; \
+		printf %s "$$value" | gcloud secrets versions add "$$name" \
+			--project "$$GCP_PROJECT" --data-file=- >/dev/null; \
+		gcloud secrets add-iam-policy-binding "$$name" --project "$$GCP_PROJECT" \
+			--member="serviceAccount:$$builder" \
+			--role=roles/secretmanager.secretAccessor --condition=None >/dev/null; \
+		echo "  secret $$name updated and readable by the runtime"; \
+	done; \
+	echo "APIs, Artifact Registry and secrets ready in $$GCP_PROJECT"
 
+# `&&` between build and deploy, not `;`: a failed build otherwise rolls straight
+# on to deploying an image that was never pushed, and the useful error scrolls
+# past the useless one.
 deploy-backend: ## Build and deploy the backend image to Cloud Run
-	@$(load_cloud_env); $(require_gcp); \
+	@$(load_cloud_env); $(require_gcp); set -e; \
 	test -n "$$QDRANT_URL" || { echo "QDRANT_URL is not set in $(CLOUD_ENV)"; exit 1; }; \
 	test -f data/processed/tables.duckdb || { echo "data/processed/tables.duckdb is missing - run 'make ingest-cloud' first"; exit 1; }; \
 	image="$$GCP_REGION-docker.pkg.dev/$$GCP_PROJECT/$(CLOUD_RUN_SERVICE)/backend:latest"; \
 	gcloud builds submit --project "$$GCP_PROJECT" --config cloudbuild.yaml \
-		--substitutions _IMAGE="$$image" .; \
+		--substitutions _IMAGE="$$image" . && \
 	gcloud run deploy $(CLOUD_RUN_SERVICE) \
 		--project "$$GCP_PROJECT" --region "$$GCP_REGION" \
 		--image "$$image" --port 8080 \
