@@ -125,7 +125,7 @@ def _degrade(exc: Exception) -> BaseCheckpointSaver:
 
     _degraded = True
     logger.warning("checkpointer degraded to in-process", extra={"fields": {
-        "target": get_settings().redis_url,
+        "target": get_settings().checkpoint_target,
         "error": f"{type(exc).__name__}: {exc}"}})
     get_checkpointer.cache_clear()
     # The graph was compiled against the saver that just failed.

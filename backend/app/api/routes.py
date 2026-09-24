@@ -204,10 +204,10 @@ def _check_checkpointer(settings) -> dict:
         # graph's own saver is async and bound to the request loop.
         with Redis.from_url(settings.redis_url, socket_connect_timeout=2) as client:
             client.ping()
-        return {"ok": True, "mode": "redis", "target": settings.redis_url,
+        return {"ok": True, "mode": "redis", "target": settings.checkpoint_target,
                 "ttl_minutes": settings.checkpoint_ttl_minutes}
     except Exception as exc:
-        return {"ok": False, "mode": "redis", "target": settings.redis_url,
+        return {"ok": False, "mode": "redis", "target": settings.checkpoint_target,
                 "error": f"{type(exc).__name__}: {exc}"}
 
 

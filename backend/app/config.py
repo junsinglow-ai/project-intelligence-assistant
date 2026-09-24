@@ -37,6 +37,25 @@ def _anchor(path: str) -> str:
     return path if Path(path).is_absolute() else str(_REPO_ROOT / path)
 
 
+def redact_url(url: str) -> str:
+    """Strip credentials from a URL so it can be logged or served.
+
+    `REDIS_URL` carries its password in the userinfo, and both the startup log
+    and `/v1/health/dependencies` report what the checkpointer is pointed at.
+    That endpoint is public on the hosted demo -- the frontend polls it
+    unauthenticated -- so the raw URL would publish the password to anyone who
+    asked. The host is kept, because "which Redis" is the whole point of
+    reporting it.
+    """
+    if "://" not in url:
+        return url
+    scheme, _, rest = url.partition("://")
+    if "@" not in rest:
+        return url
+    _, _, host = rest.rpartition("@")
+    return f"{scheme}://***@{host}"
+
+
 def _model_chain(value: str) -> list[str]:
     """Split a comma-separated model chain, strongest first.
 
@@ -231,8 +250,12 @@ class Settings(BaseSettings):
 
     @property
     def checkpoint_target(self) -> str:
-        """What the graph checkpoints to, for the startup log and the probe."""
-        return self.redis_url or "in-process"
+        """What the graph checkpoints to, for the startup log and the probe.
+
+        Redacted: both consumers are places the value is published, and the
+        probe is reachable unauthenticated on the hosted demo.
+        """
+        return redact_url(self.redis_url) if self.redis_url else "in-process"
 
     def missing_requirements(self) -> list[str]:
         """Config required by the active mode but not supplied."""

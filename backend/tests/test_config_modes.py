@@ -166,3 +166,37 @@ def test_blank_env_values_fall_back_to_defaults():
 def test_onprem_needs_no_api_key():
     """The security story in section 8.2: on-prem holds no secrets at all."""
     assert Settings(deployment_mode="onprem", llm_api_key="").missing_requirements() == []
+
+
+# --- Credentials must not reach a log or a public endpoint -----------------
+# REDIS_URL carries its password in the userinfo, and both the startup log and
+# /v1/health/dependencies report the checkpoint target. On the hosted demo that
+# endpoint is reachable unauthenticated, so the raw URL would publish it.
+
+
+def test_the_checkpoint_target_hides_the_password():
+    url = "redis://default:hunter2@redis.example.com:15685"
+
+    target = Settings(redis_url=url, llm_api_key="k").checkpoint_target
+
+    assert "hunter2" not in target
+    assert "redis.example.com:15685" in target   # which Redis is still the point
+
+
+def test_a_url_without_credentials_is_untouched():
+    url = "redis://redis:6379/0"
+
+    assert Settings(redis_url=url, llm_api_key="k").checkpoint_target == url
+
+
+def test_the_resolved_summary_is_safe_to_log():
+    """`resolved_summary()` goes to the startup log and the readiness body."""
+    summary = Settings(
+        redis_url="rediss://user:s3cret@host:1234", llm_api_key="k"
+    ).resolved_summary()
+
+    assert "s3cret" not in repr(summary)
+
+
+def test_in_process_is_reported_when_there_is_no_redis():
+    assert Settings(llm_api_key="k").checkpoint_target == "in-process"
