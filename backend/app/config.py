@@ -130,7 +130,16 @@ class Settings(BaseSettings):
     # ChatOllama has no equivalent, and an on-prem endpoint has no quota to
     # trip. Raising it only helps against a per-minute limit: once a daily quota
     # is spent every retry fails too, and each one still burns LLM_TIMEOUT_S.
-    llm_max_retries: int = 6
+    #
+    # Lowered from 6 on 2026-09-24, measured against the deployed service. The
+    # retries and the model chain solve different problems, and 6 made them
+    # fight: the provider backs off exponentially, so a model whose daily quota
+    # was gone cost ~33s of 429s (16.6 + 8.9 + 4.9 + 2.0 + 1.4) before the chain
+    # moved on. Three models, times the three to five generations a skill loop
+    # makes, put a single question past 180s. Retries are for a transient
+    # per-minute limit; an exhausted daily quota is what the chain is for, and
+    # it cannot do its job until the retries give up.
+    llm_max_retries: int = 2
 
     # --- Embeddings (mode-invariant) ---
     embedding_provider: str = "fastembed"

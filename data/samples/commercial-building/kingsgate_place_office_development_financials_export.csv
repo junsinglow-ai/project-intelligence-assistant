@@ -1,0 +1,11 @@
+cost_code,cost category,SUPPLIER,budget_gbp,actual_to_date,variance,pct_spent,comments
+SUB-01,Substructure and basement,Groundline Piling Ltd,6200000,6620000,"(420,000)",107%,"Secant pile wall, two-level basement and raft. Obstruction breakout and extra dewatering on dayworks."
+FRM-01,Structural steel frame,Brennan Steel Fabrications,9400000,7850000,1550000,0.84,Fixed-price order placed October 2025; includes metal decking and stairs.
+ENV-01,Facade and curtain walling,Vitrana Facades Ltd,7800000,2880000,4920000,37%,Unitised curtain wall. Paid through a project bank account from July 2026.
+MEP-01,"Mechanical, electrical and plumbing",Halden Building Services,11500000,3650000,7850000,0.32,"Includes lifts, BMS and the substation fit-out."
+FIT-01,Internal finishes and Cat A fit-out,Orwell Interiors,£5.2M,180k,5020000,3%,"Raised floors, ceilings and core finishes. Tenant changes on levels 7-10 not yet priced."
+PRE-01,Preliminaries and site establishment,Fenwright Construction,4900000,2460000,2440000,0.50,"Site management, welfare, hoarding, tower crane TC1 and scaffold."
+DES-01,Professional fees and design team,,2300000,1170000,1130000,51%,Architect-led design team novated to the contractor at contract signature.
+CON-01,Contingency,,1900000,310000,1590000,0.16,Released in June for weekend steel erection shifts and an extended mobile crane hire.
+,TOTAL,,49200000,25120000,24080000,,
+

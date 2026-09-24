@@ -130,3 +130,24 @@ identifiers used in the table above.
 
 To change the corpus rather than just regenerate it - with Claude Code or any
 other coding agent - see [`docs/synthetic-data-skill.md`](../docs/synthetic-data-skill.md).
+
+## Second corpus: commercial building construction
+
+[`samples/commercial-building/`](samples/commercial-building/) holds a second, independent corpus.
+It is **not indexed**: ingestion reads only `raw/`. It covers **Kingsgate Place Office Development**
+(`KGP-25`, GBP), an 11-storey steel-frame office block. It starts green, goes red when steel arrives five
+weeks late and the facade subcontractor shows signs of financial distress, and recovers to amber with
+practical completion forecast three weeks late. The substructure line overruns because of unrecorded
+obstructions and extra dewatering.
+
+It is generated from [`scripts/commercial_building_spec.json`](scripts/commercial_building_spec.json)
+with seed `23`. Its file table, flaw table and ground-truth facts are in `MESSINESS.md` and
+`manifest.json` in that directory. Neither file is ingested, because ingestion only reads PDF and
+tabular files. To regenerate:
+
+```bash
+uv run --project backend --group data python data/scripts/render_dataset.py \
+    data/scripts/commercial_building_spec.json --out data/samples/commercial-building
+```
+
+To point the assistant at this corpus instead of the default one, set `DATA_RAW_DIR=./data/samples/commercial-building` and run `make reindex`.

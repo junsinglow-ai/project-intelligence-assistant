@@ -299,3 +299,18 @@ def test_no_chain_still_points_at_the_retired_2_5_models():
 
     retired = {"gemini-2.5-flash", "gemini-2.5-flash-lite"}
     assert not retired & set(cloud.llm_models + cloud.router_models)
+
+
+def test_retries_stay_low_enough_for_the_chain_to_matter():
+    """Retries and the fallback chain solve different problems.
+
+    The provider backs off exponentially, so each retry against a model whose
+    daily quota is gone is dead time before the chain can move on. Measured on
+    the deployed service at the old default of 6: ~33s per model, which put a
+    single question past 180s once multiplied by three models and the
+    generations a skill loop makes.
+    """
+    settings = Settings(deployment_mode="cloud", llm_api_key="k")
+
+    assert settings.llm_max_retries <= 2
+    assert len(settings.llm_models) > 1, "the chain is what handles a spent quota"

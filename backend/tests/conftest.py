@@ -27,6 +27,7 @@ for _name in (
     "ROUTER_MODEL",
     "LLM_API_KEY",
     "LLM_TIMEOUT_S",
+    "LLM_MAX_RETRIES",
     "OLLAMA_BASE_URL",
     "EMBEDDING_MODEL",
     "QDRANT_COLLECTION",

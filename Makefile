@@ -248,6 +248,11 @@ deploy-setup: ## One-time: enable the APIs, create the registry and both secrets
 	done; \
 	echo "APIs, Artifact Registry and secrets ready in $$GCP_PROJECT"
 
+# AGENT_MAX_TOOL_CALLS is pinned rather than left to the code default of 3.
+# Every extra tool call is another generation, and on a free tier each
+# generation may pay a 429 fallthrough, so the budget is the latency knob in
+# cloud mode exactly as it is on-prem (ARCHITECTURE.md section 7.1).
+#
 # `&&` between build and deploy, not `;`: a failed build otherwise rolls straight
 # on to deploying an image that was never pushed, and the useful error scrolls
 # past the useless one.
@@ -264,7 +269,7 @@ deploy-backend: ## Build and deploy the backend image to Cloud Run
 		--memory 1Gi --cpu 1 --min-instances 0 --max-instances 2 \
 		--cpu-boost --timeout 300 --concurrency 4 \
 		--allow-unauthenticated \
-		--set-env-vars "^##^DEPLOYMENT_MODE=cloud##QDRANT_URL=$$QDRANT_URL##REDIS_URL=$$REDIS_URL##CORS_ORIGINS=$$CORS_ORIGINS" \
+		--set-env-vars "^##^DEPLOYMENT_MODE=cloud##QDRANT_URL=$$QDRANT_URL##REDIS_URL=$$REDIS_URL##CORS_ORIGINS=$$CORS_ORIGINS##AGENT_MAX_TOOL_CALLS=$${AGENT_MAX_TOOL_CALLS:-2}" \
 		--set-secrets "LLM_API_KEY=llm-api-key:latest,QDRANT_API_KEY=qdrant-api-key:latest"
 	@# `^##^` is gcloud's alternate delimiter: CORS_ORIGINS is itself a
 	@# comma-separated list, so the default comma separator would split it into

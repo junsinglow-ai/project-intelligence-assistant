@@ -1,0 +1,647 @@
+{
+  "generated_at": "2026-09-24T13:50:58",
+  "generator": "render_dataset.py",
+  "spec": "data/scripts/commercial_building_spec.json",
+  "seed": 23,
+  "project": {
+    "name": "Kingsgate Place Office Development",
+    "code": "KGP-25",
+    "client": "Aldermoor Estates Ltd",
+    "manager": "Siobhan Carter",
+    "sponsor": "Tom Ashworth, Development Director, Aldermoor Estates",
+    "finance_contact": "R. Okafor",
+    "currency": "GBP",
+    "start_date": "2025-10-06",
+    "end_date": "2027-06-25"
+  },
+  "periods": [
+    "2025-Q4",
+    "2026-Q1",
+    "2026-Q2",
+    "2026-Q3"
+  ],
+  "files": [
+    {
+      "file": "Kingsgate_Place_Office_Development_Status_Report_2026-Q1.pdf",
+      "type": "PDF",
+      "purpose": "Status report - 2026-Q1 (PSR-2026-03)",
+      "template": "classic"
+    },
+    {
+      "file": "kingsgate_place_office_development-status-memo-jun2026.pdf",
+      "type": "PDF",
+      "purpose": "Status report - 2026-Q2 (PSR-2026-06)",
+      "template": "memo"
+    },
+    {
+      "file": "KGP-25_PSR_2026-09-18.pdf",
+      "type": "PDF",
+      "purpose": "Status report - 2026-Q3 (PSR-2026-09)",
+      "template": "table"
+    },
+    {
+      "file": "Kingsgate_Place_Office_Development_Financial_Summary_FY26.xlsx",
+      "type": "XLSX",
+      "purpose": "Financial summary - budget vs actual by cost line and period"
+    },
+    {
+      "file": "kingsgate_place_office_development_financials_export.csv",
+      "type": "CSV",
+      "purpose": "Financial summary - flat export of the cost lines"
+    },
+    {
+      "file": "kingsgate_place_office_development_risk_register_v5.csv",
+      "type": "CSV",
+      "purpose": "Risk register"
+    }
+  ],
+  "totals": {
+    "approved_budget": 49200000.0,
+    "actual_to_date": 25120000.0,
+    "variance": 24080000.0,
+    "by_period": {
+      "2025-Q4": 3520000.0,
+      "2026-Q1": 5230000.0,
+      "2026-Q2": 7640000.0,
+      "2026-Q3": 8730000.0
+    },
+    "risks": 13
+  },
+  "flaws_enabled": [
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05",
+    "F06",
+    "F07",
+    "F08",
+    "F09",
+    "F10",
+    "M01",
+    "M02",
+    "M03",
+    "M04",
+    "M05",
+    "M06",
+    "M07",
+    "M08",
+    "M09",
+    "M10"
+  ],
+  "flaws_by_file": {
+    "Kingsgate_Place_Office_Development_Status_Report_2026-Q1.pdf": [
+      "F01",
+      "F02",
+      "F05",
+      "F03",
+      "M01",
+      "F06",
+      "M07",
+      "F10"
+    ],
+    "kingsgate_place_office_development-status-memo-jun2026.pdf": [
+      "F01",
+      "F02",
+      "F05",
+      "F03",
+      "M01",
+      "M08",
+      "M07",
+      "F10"
+    ],
+    "KGP-25_PSR_2026-09-18.pdf": [
+      "F01",
+      "F02",
+      "F05",
+      "F03",
+      "M01",
+      "F06",
+      "M07",
+      "F10"
+    ],
+    "Kingsgate_Place_Office_Development_Financial_Summary_FY26.xlsx": [
+      "M04",
+      "F04",
+      "M07",
+      "M06",
+      "F07",
+      "F05",
+      "M01",
+      "M02",
+      "M10",
+      "M09",
+      "F01"
+    ],
+    "kingsgate_place_office_development_financials_export.csv": [
+      "F04",
+      "F02",
+      "F06",
+      "M10",
+      "F09"
+    ],
+    "kingsgate_place_office_development_risk_register_v5.csv": [
+      "F04",
+      "M03",
+      "M07",
+      "F05",
+      "F08",
+      "M01",
+      "F01",
+      "F02",
+      "F03",
+      "F06",
+      "M05"
+    ]
+  },
+  "flaw_occurrences": [
+    {
+      "flaw": "F01",
+      "file": "Kingsgate_Place_Office_Development_Status_Report_2026-Q1.pdf",
+      "detail": "dates are written like 2026-03-27"
+    },
+    {
+      "flaw": "F02",
+      "file": "Kingsgate_Place_Office_Development_Status_Report_2026-Q1.pdf",
+      "detail": "amounts are written like £49,200,000"
+    },
+    {
+      "flaw": "F05",
+      "file": "Kingsgate_Place_Office_Development_Status_Report_2026-Q1.pdf",
+      "detail": "project name appears as 'Kingsgate Place Office Development'; filename follows a different convention from the other reports"
+    },
+    {
+      "flaw": "F03",
+      "file": "Kingsgate_Place_Office_Development_Status_Report_2026-Q1.pdf",
+      "detail": "overall status written as 'On Track'"
+    },
+    {
+      "flaw": "F01",
+      "file": "Kingsgate_Place_Office_Development_Status_Report_2026-Q1.pdf",
+      "detail": "milestone 'Tower crane TC1 erected' shows its due date as 6 February 2026 rather than the 2026-02-06 form used by the rest of the table"
+    },
+    {
+      "flaw": "M01",
+      "file": "Kingsgate_Place_Office_Development_Status_Report_2026-Q1.pdf",
+      "detail": "milestone 'Tower crane TC1 erected' has no owner"
+    },
+    {
+      "flaw": "F06",
+      "file": "Kingsgate_Place_Office_Development_Status_Report_2026-Q1.pdf",
+      "detail": "percentage spent written as '18%'"
+    },
+    {
+      "flaw": "M07",
+      "file": "Kingsgate_Place_Office_Development_Status_Report_2026-Q1.pdf",
+      "detail": "issue 1 is a placeholder or stops mid-sentence"
+    },
+    {
+      "flaw": "F10",
+      "file": "Kingsgate_Place_Office_Development_Status_Report_2026-Q1.pdf",
+      "detail": "confidentiality banner, project code and 'Page x of y' repeat on every page"
+    },
+    {
+      "flaw": "F01",
+      "file": "kingsgate_place_office_development-status-memo-jun2026.pdf",
+      "detail": "dates are written like 26/06/2026"
+    },
+    {
+      "flaw": "F02",
+      "file": "kingsgate_place_office_development-status-memo-jun2026.pdf",
+      "detail": "amounts are written like £49.2M"
+    },
+    {
+      "flaw": "F05",
+      "file": "kingsgate_place_office_development-status-memo-jun2026.pdf",
+      "detail": "project name appears as 'KINGSGATE PLACE OFFICE DEVELOPMENT'; filename follows a different convention from the other reports"
+    },
+    {
+      "flaw": "F03",
+      "file": "kingsgate_place_office_development-status-memo-jun2026.pdf",
+      "detail": "overall status written as 'Critical'"
+    },
+    {
+      "flaw": "M01",
+      "file": "kingsgate_place_office_development-status-memo-jun2026.pdf",
+      "detail": "milestone 'Basement structure complete' has no owner"
+    },
+    {
+      "flaw": "F01",
+      "file": "kingsgate_place_office_development-status-memo-jun2026.pdf",
+      "detail": "milestone 'First steel delivery' shows its due date as 2026-05-18 rather than the 18/05/2026 form used by the rest of the table"
+    },
+    {
+      "flaw": "M08",
+      "file": "kingsgate_place_office_development-status-memo-jun2026.pdf",
+      "detail": "the budget / financial position section is absent from this report"
+    },
+    {
+      "flaw": "M07",
+      "file": "kingsgate_place_office_development-status-memo-jun2026.pdf",
+      "detail": "issue 1 is a placeholder or stops mid-sentence"
+    },
+    {
+      "flaw": "F10",
+      "file": "kingsgate_place_office_development-status-memo-jun2026.pdf",
+      "detail": "confidentiality banner, project code and 'Page x of y' repeat on every page"
+    },
+    {
+      "flaw": "F01",
+      "file": "KGP-25_PSR_2026-09-18.pdf",
+      "detail": "dates are written like 18-Sep-26"
+    },
+    {
+      "flaw": "F02",
+      "file": "KGP-25_PSR_2026-09-18.pdf",
+      "detail": "amounts are written like 49,200,000 GBP"
+    },
+    {
+      "flaw": "F05",
+      "file": "KGP-25_PSR_2026-09-18.pdf",
+      "detail": "project name appears as 'kingsgate place office development'; filename follows a different convention from the other reports"
+    },
+    {
+      "flaw": "F03",
+      "file": "KGP-25_PSR_2026-09-18.pdf",
+      "detail": "overall status written as 'Yellow'"
+    },
+    {
+      "flaw": "F01",
+      "file": "KGP-25_PSR_2026-09-18.pdf",
+      "detail": "milestone 'Steel frame topping out' shows its due date as 2026-08-07 rather than the 07-Aug-26 form used by the rest of the table"
+    },
+    {
+      "flaw": "M01",
+      "file": "KGP-25_PSR_2026-09-18.pdf",
+      "detail": "milestone 'MEP first fix levels 1-5' has no owner"
+    },
+    {
+      "flaw": "F06",
+      "file": "KGP-25_PSR_2026-09-18.pdf",
+      "detail": "percentage spent written as '51 pct'"
+    },
+    {
+      "flaw": "M07",
+      "file": "KGP-25_PSR_2026-09-18.pdf",
+      "detail": "issue 3 is a placeholder or stops mid-sentence"
+    },
+    {
+      "flaw": "F10",
+      "file": "KGP-25_PSR_2026-09-18.pdf",
+      "detail": "confidentiality banner, project code and 'Page x of y' repeat on every page"
+    },
+    {
+      "flaw": "M04",
+      "file": "Kingsgate_Place_Office_Development_Financial_Summary_FY26.xlsx",
+      "detail": "rows 1-2 are a merged title banner and an export stamp; the real header row is row 4"
+    },
+    {
+      "flaw": "F04",
+      "file": "Kingsgate_Place_Office_Development_Financial_Summary_FY26.xlsx",
+      "detail": "header row mixes Title Case, snake_case and UPPER CASE spellings of the same fields"
+    },
+    {
+      "flaw": "M07",
+      "file": "Kingsgate_Place_Office_Development_Financial_Summary_FY26.xlsx",
+      "detail": "the note for 'Substructure and basement' is a placeholder ('per last month')"
+    },
+    {
+      "flaw": "M06",
+      "file": "Kingsgate_Place_Office_Development_Financial_Summary_FY26.xlsx",
+      "detail": "the approved budget for 'Internal finishes and Cat A fit-out' is the text ' 5,200,000 ' rather than a number"
+    },
+    {
+      "flaw": "F07",
+      "file": "Kingsgate_Place_Office_Development_Financial_Summary_FY26.xlsx",
+      "detail": "actuals for 'Preliminaries and site establishment' use European separators (2.460.000,00)"
+    },
+    {
+      "flaw": "F05",
+      "file": "Kingsgate_Place_Office_Development_Financial_Summary_FY26.xlsx",
+      "detail": "vendor names carry stray leading/trailing spaces"
+    },
+    {
+      "flaw": "M01",
+      "file": "Kingsgate_Place_Office_Development_Financial_Summary_FY26.xlsx",
+      "detail": "'Professional fees and design team' has no vendor recorded"
+    },
+    {
+      "flaw": "M02",
+      "file": "Kingsgate_Place_Office_Development_Financial_Summary_FY26.xlsx",
+      "detail": "an empty note is written as 'n/a'"
+    },
+    {
+      "flaw": "M10",
+      "file": "Kingsgate_Place_Office_Development_Financial_Summary_FY26.xlsx",
+      "detail": "a bold TOTAL row sits at row 13 inside the data block, not in a separate summary area"
+    },
+    {
+      "flaw": "M09",
+      "file": "Kingsgate_Place_Office_Development_Financial_Summary_FY26.xlsx",
+      "detail": "the used range runs past the data with blank rows and an empty column J"
+    },
+    {
+      "flaw": "F01",
+      "file": "Kingsgate_Place_Office_Development_Financial_Summary_FY26.xlsx",
+      "detail": "the 'By Period' sheet labels the same quarters 2025-Q4, Q1 2026, 2Q26 and so on"
+    },
+    {
+      "flaw": "F04",
+      "file": "kingsgate_place_office_development_financials_export.csv",
+      "detail": "the same fields are named differently here than in the workbook (SUPPLIER vs Vendor, comments vs Notes)"
+    },
+    {
+      "flaw": "F02",
+      "file": "kingsgate_place_office_development_financials_export.csv",
+      "detail": "overspends are written in parentheses rather than with a minus sign"
+    },
+    {
+      "flaw": "F02",
+      "file": "kingsgate_place_office_development_financials_export.csv",
+      "detail": "'Internal finishes and Cat A fit-out' is reported as £5.2M / 180k while every other row is plain digits"
+    },
+    {
+      "flaw": "F06",
+      "file": "kingsgate_place_office_development_financials_export.csv",
+      "detail": "'% spent' alternates between 0.42 and 42% down the same column"
+    },
+    {
+      "flaw": "M10",
+      "file": "kingsgate_place_office_development_financials_export.csv",
+      "detail": "the last data row is a TOTAL row with the same shape as a cost line"
+    },
+    {
+      "flaw": "F09",
+      "file": "kingsgate_place_office_development_financials_export.csv",
+      "detail": "CRLF line endings and a trailing blank line, as written by a Windows finance tool"
+    },
+    {
+      "flaw": "F04",
+      "file": "kingsgate_place_office_development_risk_register_v5.csv",
+      "detail": "columns are named differently from the status reports (Risk Owner vs Owner, raised vs Date Raised) and mix snake_case with Title Case"
+    },
+    {
+      "flaw": "M03",
+      "file": "kingsgate_place_office_development_risk_register_v5.csv",
+      "detail": "R-007 ('Building control approval of revised slab-edge fire-stopping') is open with no mitigation recorded"
+    },
+    {
+      "flaw": "M07",
+      "file": "kingsgate_place_office_development_risk_register_v5.csv",
+      "detail": "the mitigation for R-008 is a placeholder ('???')"
+    },
+    {
+      "flaw": "F05",
+      "file": "kingsgate_place_office_development_risk_register_v5.csv",
+      "detail": "the description for R-010 has stray whitespace"
+    },
+    {
+      "flaw": "F08",
+      "file": "kingsgate_place_office_development_risk_register_v5.csv",
+      "detail": "the description for R-010 contains an en-dash and a curly apostrophe"
+    },
+    {
+      "flaw": "M01",
+      "file": "kingsgate_place_office_development_risk_register_v5.csv",
+      "detail": "R-011 has no owner recorded"
+    },
+    {
+      "flaw": "M01",
+      "file": "kingsgate_place_office_development_risk_register_v5.csv",
+      "detail": "R-013 has no risk score"
+    },
+    {
+      "flaw": "F01",
+      "file": "kingsgate_place_office_development_risk_register_v5.csv",
+      "detail": "every row carries its own date convention, because rows were pasted in from different trackers"
+    },
+    {
+      "flaw": "F02",
+      "file": "kingsgate_place_office_development_risk_register_v5.csv",
+      "detail": "exposure is written as plain digits, S$1.2M, 1200k and '1,200,000 SGD' in different rows"
+    },
+    {
+      "flaw": "F03",
+      "file": "kingsgate_place_office_development_risk_register_v5.csv",
+      "detail": "status values appear as Open / OPEN / open / Closed / CLOSED"
+    },
+    {
+      "flaw": "F06",
+      "file": "kingsgate_place_office_development_risk_register_v5.csv",
+      "detail": "likelihood is recorded as 'High', '4' and '80%' for the same level of risk"
+    },
+    {
+      "flaw": "M05",
+      "file": "kingsgate_place_office_development_risk_register_v5.csv",
+      "detail": "the description for R-009 contains an unquoted comma, so that row parses with one extra column"
+    },
+    {
+      "flaw": "F08",
+      "file": "kingsgate_place_office_development_risk_register_v5.csv",
+      "detail": "the file starts with a UTF-8 BOM, so a naive reader sees '\\ufeffRisk ID' as the first column name"
+    }
+  ],
+  "flaw_catalogue": {
+    "F01": {
+      "family": "format",
+      "name": "Mixed date formats",
+      "summary": "Each document uses its own date convention (2026-03-31, 31/03/2026, 31-Mar-26, March 2026, Q1 FY26); hand-edited rows drift from their file's house style.",
+      "handling": "Parse with a multi-format date parser and normalise to ISO-8601 at ingestion; resolve dd/mm vs mm/dd against the file's dominant style and keep the raw string in metadata."
+    },
+    "F02": {
+      "family": "format",
+      "name": "Mixed currency notation",
+      "summary": "The same amount appears as 1200000, \"1,200,000\", \"S$1.2M\", \"1200k\" and \"1,200,000 SGD\"; negatives as -45000 and (45,000).",
+      "handling": "Strip symbols/separators and expand k/M suffixes to a numeric value plus a currency code; read parenthesised numbers as negative."
+    },
+    "F03": {
+      "family": "format",
+      "name": "Inconsistent status vocabulary",
+      "summary": "RAG and progress states are spelled every way a human would type them: Green / GREEN / On Track / G, Amber / At Risk / Yellow, Complete / Completed / DONE / done.",
+      "handling": "Map to a controlled vocabulary with a case-insensitive synonym table; surface unmapped values rather than silently dropping them."
+    },
+    "F04": {
+      "family": "format",
+      "name": "Header naming drift",
+      "summary": "The same concept is headed differently across files and within one header row (Owner / Risk Owner / Accountable, Date Raised / raised_date).",
+      "handling": "Resolve headers through a synonym map to canonical field names; match case-insensitively after stripping punctuation and spaces."
+    },
+    "F05": {
+      "family": "format",
+      "name": "Whitespace, casing and filename drift",
+      "summary": "Leading/trailing and doubled spaces in cells, the project name cased three ways, and filenames following three different conventions.",
+      "handling": "Strip and collapse whitespace on ingestion; casefold before matching entity names; never derive metadata from the filename alone."
+    },
+    "F06": {
+      "family": "format",
+      "name": "Mixed scale and percentage notation",
+      "summary": "Likelihood is 'High' in one row, '4' in another and '80%' in a third; completion shows as 0.35, 35% and '35 pct'.",
+      "handling": "Detect ordinal-vs-numeric-vs-percentage per value and convert to one scale; record the interpretation so an answer can cite the raw form."
+    },
+    "F07": {
+      "family": "format",
+      "name": "Decimal and thousands separator drift",
+      "summary": "One locale-confused export row writes 1.250,00 and another 1 250, alongside the file's normal 1,250.00.",
+      "handling": "Sniff the separator per value (last separator wins as decimal) instead of a global locale assumption; quarantine what stays ambiguous."
+    },
+    "F08": {
+      "family": "format",
+      "name": "UTF-8 BOM and non-ASCII text",
+      "summary": "A CSV starts with a BOM and carries en-dashes, curly quotes and accented vendor names.",
+      "handling": "Open CSVs as utf-8-sig and keep text as Unicode; normalise dashes and quotes only for matching, not for display."
+    },
+    "F09": {
+      "family": "format",
+      "name": "Mixed line endings",
+      "summary": "One CSV is written with CRLF line endings and a trailing blank line, as exported from a Windows finance tool.",
+      "handling": "Read with universal newlines and drop empty trailing records."
+    },
+    "F10": {
+      "family": "format",
+      "name": "Repeated page furniture in PDFs",
+      "summary": "Every PDF page repeats a confidentiality banner, project code and 'Page x of y', which lands in the middle of extracted text.",
+      "handling": "Strip repeated header/footer lines during PDF extraction (drop lines that recur on most pages) before chunking, so chunks stay clean."
+    },
+    "M01": {
+      "family": "missing",
+      "name": "Blank required fields",
+      "summary": "A milestone with no owner, a risk with no review date, a cost line with no vendor - cells simply left empty.",
+      "handling": "Treat empty as unknown rather than zero; keep the row, flag the gap, and say the field is missing rather than inventing a value."
+    },
+    "M02": {
+      "family": "missing",
+      "name": "Inconsistent null tokens",
+      "summary": "Absent values are written as TBD, N/A, n/a, -, tbc, unknown and ??? in the same column.",
+      "handling": "Normalise a null-token list to a real null at ingestion, case-insensitively, so counts and aggregates don't treat 'N/A' as a value."
+    },
+    "M03": {
+      "family": "missing",
+      "name": "Risk recorded without mitigation",
+      "summary": "At least one high-scoring risk has an empty mitigation/action cell.",
+      "handling": "Surface it as an explicit gap ('no mitigation recorded') - a question about mitigations must not silently skip the row."
+    },
+    "M04": {
+      "family": "missing",
+      "name": "Spreadsheet title rows and merged cells",
+      "summary": "The workbook opens with a merged title banner and an export stamp above the real header row, so row 1 is not the header.",
+      "handling": "Detect the header row by scanning for the first row that looks like field names; unmerge and forward-fill merged cells before parsing."
+    },
+    "M05": {
+      "family": "missing",
+      "name": "Ragged CSV row",
+      "summary": "One free-text field contains an unquoted comma, so that row parses with one column too many.",
+      "handling": "Parse leniently and repair rows whose field count is off by one by re-joining the overflow into the free-text column; log the repair."
+    },
+    "M06": {
+      "family": "missing",
+      "name": "Numbers stored as text",
+      "summary": "Some spreadsheet amounts are strings (\" 1,200,000 \", \"1.2m\") rather than numeric cells.",
+      "handling": "Coerce per cell rather than trusting the column type; keep the raw string when coercion fails instead of dropping the row."
+    },
+    "M07": {
+      "family": "missing",
+      "name": "Placeholder and truncated text",
+      "summary": "Notes read 'see attached', 'per last month', '???' or stop mid-sentence.",
+      "handling": "Treat placeholder phrases as non-answers; never quote them as the substance of a mitigation or decision."
+    },
+    "M08": {
+      "family": "missing",
+      "name": "Omitted report section",
+      "summary": "One status report has no budget section at all - the author ran out of time that month.",
+      "handling": "Answer from the period that does report it and say the section is absent, rather than assuming the figure is unchanged or zero."
+    },
+    "M09": {
+      "family": "missing",
+      "name": "Trailing empty rows and columns",
+      "summary": "The sheet's used range extends past the data with blank rows and a stray empty column.",
+      "handling": "Trim wholly empty rows/columns after reading the used range so row counts and aggregates are right."
+    },
+    "M10": {
+      "family": "missing",
+      "name": "Embedded total row",
+      "summary": "A 'TOTAL' row sits inside the data rows of the export, not in a separate summary block.",
+      "handling": "Detect and exclude label rows (TOTAL/Subtotal/Grand Total) before aggregating, or the numbers double-count."
+    }
+  },
+  "ground_truth_facts": [
+    {
+      "question": "What is the approved budget for Kingsgate Place Office Development?",
+      "answer": "49,200,000 GBP",
+      "sources": [
+        "Kingsgate_Place_Office_Development_Financial_Summary_FY26.xlsx",
+        "kingsgate_place_office_development_financials_export.csv"
+      ],
+      "watch_out": "The same figure is written as plain digits, with separators and in compact form (F02)."
+    },
+    {
+      "question": "How much had been spent by the end of 2026-Q3?",
+      "answer": "25,120,000 GBP (51% of budget)",
+      "sources": [
+        "Kingsgate_Place_Office_Development_Financial_Summary_FY26.xlsx",
+        "kingsgate_place_office_development_financials_export.csv",
+        "KGP-25_PSR_2026-09-18.pdf"
+      ],
+      "watch_out": "A TOTAL row sits inside the cost lines; including it double-counts (M10)."
+    },
+    {
+      "question": "Is the project over or under budget as at 2026-Q3?",
+      "answer": "Under budget by 24,080,000 GBP",
+      "sources": [
+        "Kingsgate_Place_Office_Development_Financial_Summary_FY26.xlsx",
+        "kingsgate_place_office_development_financials_export.csv"
+      ],
+      "watch_out": "Overspends appear in parentheses rather than with a minus sign (F02)."
+    },
+    {
+      "question": "Which cost category carries the largest approved budget?",
+      "answer": "Mechanical, electrical and plumbing (11,500,000 GBP)",
+      "sources": [
+        "Kingsgate_Place_Office_Development_Financial_Summary_FY26.xlsx",
+        "kingsgate_place_office_development_financials_export.csv"
+      ],
+      "watch_out": "One budget cell is stored as text (M06)."
+    },
+    {
+      "question": "How many risks are currently open?",
+      "answer": "7",
+      "sources": [
+        "kingsgate_place_office_development_risk_register_v5.csv"
+      ],
+      "watch_out": "Status casing varies (Open / OPEN / open) so matching must be case-insensitive (F03)."
+    },
+    {
+      "question": "Which risk has the highest financial exposure, and who owns it?",
+      "answer": "R-004 - Curtain wall subcontractor in financial distress (720,000 GBP), owned by Rukayat Okafor",
+      "sources": [
+        "kingsgate_place_office_development_risk_register_v5.csv"
+      ],
+      "watch_out": "Exposure is written in several notations, so values need parsing before they can be compared (F02)."
+    },
+    {
+      "question": "Which risks have no mitigation recorded?",
+      "answer": "R-007",
+      "sources": [
+        "kingsgate_place_office_development_risk_register_v5.csv"
+      ],
+      "watch_out": "The cell is empty rather than marked; the gap must be reported, not skipped (M03)."
+    },
+    {
+      "question": "What was the overall status in each reporting period?",
+      "answer": "2026-Q1: Green; 2026-Q2: Red; 2026-Q3: Amber",
+      "sources": [
+        "Kingsgate_Place_Office_Development_Status_Report_2026-Q1.pdf",
+        "kingsgate_place_office_development-status-memo-jun2026.pdf",
+        "KGP-25_PSR_2026-09-18.pdf"
+      ],
+      "watch_out": "Each report spells its status differently (Green / On Track / G) (F03)."
+    },
+    {
+      "question": "What does kingsgate_place_office_development-status-memo-jun2026.pdf say about the budget?",
+      "answer": "Nothing - that report has no financial section; the figure has to come from another period or from the financial summary.",
+      "sources": [
+        "kingsgate_place_office_development-status-memo-jun2026.pdf"
+      ],
+      "watch_out": "A confident answer here is a hallucination (M08)."
+    }
+  ]
+}
