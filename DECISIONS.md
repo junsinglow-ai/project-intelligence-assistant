@@ -23,6 +23,21 @@ Each entry records what was decided, what else was considered, why, what trade-o
   `gemini-3.5-flash` and the `gemini-flash-latest` alias all returned 429 within a few minutes of
   light use, while every `lite` model answered in about a second. Each chain therefore ends in a
   lite model, because the last entry is the one that has to work.
+- **Amended 2026-09-24, quota handling.** Two changes came out of running the chain against a real
+  free-tier key on the deployed service, both measured rather than reasoned:
+  - `LLM_MAX_RETRIES` dropped from 6 to 2. Retries and the chain solve different problems and at 6
+    they fought: the provider backs off exponentially, so an exhausted model cost ~33s of 429s
+    before the chain could move on, and one question ran past 180s.
+  - `QuotaAwareFallback` (`app/llm/quota.py`) remembers, for one request, which models answered 429.
+    Without it `ModelFallbackMiddleware` walks from the top of the chain on every model call, and a
+    skill loop makes several: one question produced **30** 429s. With it, 6-9, and the same question
+    went from 143s to 11-23s. The memo is scoped to the request rather than the process because
+    quota windows reopen, and a process-wide one would keep using the weakest model long after the
+    strongest recovered.
+  - *Trade-off accepted:* neither change creates quota. Once every model in the chain is exhausted
+    the request fails, quickly and with the provider's own error. On a free tier that is a question
+    of how many questions have been asked that day, not of configuration -- so a demo session and an
+    evaluation run compete for the same daily allowance.
 - **Alternatives considered:** Groq free tier (fastest hosted inference and a viable cloud swap, but
   serves no embedding models); OpenRouter free models (widest selection behind one key, rejected for
   unpredictable availability — a demo failure would look like a defect in this system); vLLM or TGI

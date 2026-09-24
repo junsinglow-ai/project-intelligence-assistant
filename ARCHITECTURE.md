@@ -510,6 +510,13 @@ configuration:
   74 output tokens, so context length is the lever that matters most for on-prem latency — which is
   an argument for keeping `RERANK_TOP_N` small rather than feeding the model everything retrieved.
 
+**Deployed cloud-mode latency is dominated by quota, not by the model.** Measured against the Cloud
+Run service on a free-tier key, the same question ranged from 11s to 143s depending only on how much
+of the daily allowance was left. The variable is how many models the chain has to walk past before
+one answers, multiplied by every generation in the skill loop -- which is why the per-request memo
+in `app/llm/quota.py` and a low `LLM_MAX_RETRIES` matter more here than any per-call tuning. A demo
+session and a RAGAS run draw on the same daily allowance, so they cannot both be done on one key.
+
 This is why `LLM_TIMEOUT_S` defaults differ by mode, and why it is set as a safety net (600s) rather
 than a latency target.
 
