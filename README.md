@@ -192,6 +192,34 @@ RediSearch module. Upstash has no RediSearch and the failure is quiet: `app/grap
 degrades to the in-process saver with a warning and answers anyway. `make deploy-check` is what
 catches it — see step 5.
 
+### Local and hosted side by side
+
+The two configurations live in separate files, so neither has to be edited back
+and forth:
+
+| | `.env` | `.env.cloud` |
+|---|---|---|
+| Qdrant | the `qdrant` container | Qdrant Cloud cluster |
+| Redis | the `redis` container | Redis Cloud database |
+| Used by | `make up`, `make ingest`, `make ready`, the test suite | `make ingest-cloud`, `make ready-cloud`, `make deploy-*` |
+| Committed | no (`.env.example` is) | no (`.env.cloud.example` is) |
+
+`make env` creates both from their templates. The cloud targets source
+`.env.cloud` into the environment on top of `.env`, and real environment
+variables beat the dotenv file, so the managed endpoints win while everything
+not named there — `LLM_API_KEY`, the chunking knobs — still comes from `.env`.
+Running the local stack therefore needs no change at all: `make up` and
+`make ingest` keep using the containers.
+
+```bash
+make ready         # resolve against the local containers
+make ready-cloud   # resolve against the managed services, as the deployment will
+```
+
+`make ready-cloud` blanks the variables the deployment will not inherit from
+`.env`, so it reports the provider and model chain Cloud Run will actually
+resolve rather than whatever your local `.env` happens to say.
+
 ### 1. Provision
 
 | Service | Tier | What to keep |
@@ -206,26 +234,25 @@ a month needs the cluster recreated and `make ingest` re-run.
 
 ### 2. Build the index and the tables
 
-Point `.env` at the Qdrant Cloud cluster and run the ordinary ingest:
+Fill in `.env.cloud` (created by `make env`) with the cluster URL and key, then:
 
 ```bash
-QDRANT_URL=https://<cluster>.cloud.qdrant.io:6333
-QDRANT_API_KEY=<key>
-```
-```bash
-make ingest
+make ingest-cloud
 ```
 
 This fills the cloud index **and** rebuilds `data/processed/tables.duckdb`, which the image bakes in
-so the Data Analysis agent has its tables with no volume to mount.
+so the Data Analysis agent has its tables with no volume to mount. `make ingest` still targets the
+local container, so the two indexes stay independent.
 
 ### 3. Deploy the backend
 
+`GCP_PROJECT`, `GCP_REGION` and the service URLs all come from `.env.cloud`, so there is nothing to
+pass on the command line:
+
 ```bash
-export GCP_PROJECT=<project>            # GCP_REGION defaults to us-central1
-make deploy-setup                       # one-time: Artifact Registry + the two secrets
-make deploy-backend QDRANT_URL=<url> REDIS_URL=<url> CORS_ORIGINS=http://localhost:5173
-make deploy-url                         # the backend URL, needed by the next step
+make deploy-setup    # one-time: enables the APIs, creates Artifact Registry and both secrets
+make deploy-backend
+make deploy-url      # the backend URL, needed by the next step
 ```
 
 The region must be `us-central1`, `us-east1` or `us-west1` — the Cloud Run free tier covers no
@@ -240,8 +267,10 @@ changing it later needs a rebuild, not a restart.
 The two URLs depend on each other, so the last step is a second backend deploy that tells it about
 the frontend:
 
+Set `CORS_ORIGINS` in `.env.cloud` to the Vercel origin, then redeploy:
+
 ```bash
-make deploy-backend QDRANT_URL=<url> REDIS_URL=<url> CORS_ORIGINS=https://<app>.vercel.app
+make deploy-backend
 ```
 
 Get this wrong and the UI shows a permanently red health badge rather than an error — the browser

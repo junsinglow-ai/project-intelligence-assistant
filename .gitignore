@@ -12,6 +12,8 @@ venv/
 .env
 .env.*
 !.env.example
+# The managed-services template; `.env.cloud` itself holds real keys and stays out.
+!.env.cloud.example
 
 # Node
 node_modules/

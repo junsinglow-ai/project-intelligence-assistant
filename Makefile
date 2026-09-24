@@ -7,10 +7,16 @@ COMPOSE := docker compose
 BACKEND := backend
 FRONTEND := frontend
 
+# The managed-services overrides used by the `*-cloud` and `deploy-*` targets.
+# Declared here rather than beside them because it names a target below, and
+# make expands a target name as it reads the rule.
+CLOUD_ENV ?= .env.cloud
+
 .DEFAULT_GOAL := help
 .PHONY: help env up up-onprem down restart build rebuild logs logs-backend logs-frontend ps \
         qdrant redis ready models ingest reindex query sql shell-backend shell-frontend clean install dev-backend dev-frontend test \
-        data eval lock upgrade deploy-setup deploy-backend deploy-url deploy-check
+        data eval lock upgrade ingest-cloud reindex-cloud ready-cloud \
+        deploy-setup deploy-backend deploy-url deploy-check
 
 help: ## Show available targets
 	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -22,7 +28,15 @@ help: ## Show available targets
 	@cp .env.example .env
 	@echo "Created .env from .env.example - fill in the LLM / embedding settings."
 
-env: .env ## Create .env from .env.example if missing
+# Separate from .env on purpose: .env points at the local Qdrant and Redis
+# containers, and this holds the managed endpoints that replace them for the
+# hosted demo. Keeping them apart is what lets `make up` and `make deploy-*`
+# coexist without editing one file back and forth.
+$(CLOUD_ENV):
+	@cp .env.cloud.example $(CLOUD_ENV)
+	@echo "Created $(CLOUD_ENV) - fill in the Qdrant Cloud, Redis Cloud and GCP values."
+
+env: .env $(CLOUD_ENV) ## Create .env and .env.cloud from their templates if missing
 
 up: env ## Build if needed and start the stack in the background
 	$(COMPOSE) up -d --build
@@ -131,45 +145,90 @@ eval: ## Run the RAGAS evaluation into eval/results
 
 # --- Deployment (DECISIONS.md D-009) --------------------------------------
 # Backend on Cloud Run, frontend on Vercel, with Qdrant Cloud and Redis Cloud
-# behind them. GCP_PROJECT and GCP_REGION come from the environment; the region
-# must be one of the three the Cloud Run free tier covers.
-GCP_REGION ?= us-central1
+# behind them.
+#
+# Everything here reads `.env.cloud` rather than `.env`, which is what keeps
+# the local stack and the hosted one from fighting over the same variables:
+# `.env` points QDRANT_URL and REDIS_URL at the containers `make up` starts,
+# and `.env.cloud` overrides them with the managed endpoints. It is loaded into
+# the environment, so it wins over `.env` (pydantic-settings reads real
+# environment variables ahead of the dotenv file) while everything not named in
+# it -- LLM_API_KEY, the chunking knobs -- still comes from `.env`.
 CLOUD_RUN_SERVICE ?= project-intelligence-backend
 
-IMAGE = $(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT)/$(CLOUD_RUN_SERVICE)/backend:latest
+# `set -a` exports every assignment the file makes, so the sourced values reach
+# both the Python process and gcloud.
+define load_cloud_env
+env_file="$(CLOUD_ENV)"; \
+case "$$env_file" in /*) ;; *) env_file="./$$env_file" ;; esac; \
+test -f "$$env_file" || { echo "$(CLOUD_ENV) is missing - run 'make env' and fill it in"; exit 1; }; \
+set -a; . "$$env_file"; set +a; \
+: $${GCP_REGION:=us-central1}
+endef
+
+# Guards shared by the deploy targets. Shell rather than make conditionals
+# because the values arrive from the sourced file, after make has parsed this.
+define require_gcp
+test -n "$$GCP_PROJECT" || { echo "GCP_PROJECT is not set in $(CLOUD_ENV)"; exit 1; }; \
+case "$$GCP_REGION" in us-central1|us-east1|us-west1) ;; \
+  *) echo "GCP_REGION=$$GCP_REGION is outside the Cloud Run free tier (us-central1|us-east1|us-west1)"; exit 1 ;; esac
+endef
+
+ingest-cloud: ## Index data/raw into the managed Qdrant Cloud cluster
+	@$(load_cloud_env); \
+	echo "indexing into $$QDRANT_URL"; \
+	uv run --directory $(BACKEND) python -c "$$INGEST"
+
+reindex-cloud: ## Drop and rebuild the managed index (after EMBEDDING_MODEL changes)
+	@$(load_cloud_env); \
+	echo "reindexing $$QDRANT_URL"; \
+	uv run --directory $(BACKEND) python -c "$$REINDEX"
+
+ready-cloud: ## Resolve config against the managed services, without deploying
+	@$(load_cloud_env); \
+	uv run --directory $(BACKEND) python -c "$$READY_CLOUD"
 
 deploy-setup: ## One-time: create the Artifact Registry repo and the two secrets
-	@test -n "$(GCP_PROJECT)" || { echo "GCP_PROJECT is not set"; exit 1; }
+	@$(load_cloud_env); $(require_gcp); \
 	gcloud artifacts repositories create $(CLOUD_RUN_SERVICE) \
-		--project $(GCP_PROJECT) --location $(GCP_REGION) --repository-format docker \
-		|| echo "repository already exists, continuing"
-	@echo "Now create the secrets (reads from stdin, so nothing lands in your shell history):"
-	@echo "  printf %s \"\$$GEMINI_KEY\" | gcloud secrets create llm-api-key    --project $(GCP_PROJECT) --data-file=-"
-	@echo "  printf %s \"\$$QDRANT_KEY\" | gcloud secrets create qdrant-api-key --project $(GCP_PROJECT) --data-file=-"
+		--project "$$GCP_PROJECT" --location "$$GCP_REGION" --repository-format docker \
+		|| echo "repository already exists, continuing"; \
+	gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
+		artifactregistry.googleapis.com secretmanager.googleapis.com \
+		--project "$$GCP_PROJECT"; \
+	printf %s "$$LLM_API_KEY" | gcloud secrets create llm-api-key \
+		--project "$$GCP_PROJECT" --data-file=- 2>/dev/null \
+		|| printf %s "$$LLM_API_KEY" | gcloud secrets versions add llm-api-key \
+			--project "$$GCP_PROJECT" --data-file=-; \
+	printf %s "$$QDRANT_API_KEY" | gcloud secrets create qdrant-api-key \
+		--project "$$GCP_PROJECT" --data-file=- 2>/dev/null \
+		|| printf %s "$$QDRANT_API_KEY" | gcloud secrets versions add qdrant-api-key \
+			--project "$$GCP_PROJECT" --data-file=-; \
+	echo "Artifact Registry, APIs and secrets ready in $$GCP_PROJECT"
 
 deploy-backend: ## Build and deploy the backend image to Cloud Run
-	@test -n "$(GCP_PROJECT)" || { echo "GCP_PROJECT is not set"; exit 1; }
-	@case "$(GCP_REGION)" in us-central1|us-east1|us-west1) ;; \
-		*) echo "GCP_REGION=$(GCP_REGION) is outside the free tier (us-central1|us-east1|us-west1)"; exit 1 ;; esac
-	@test -n "$(QDRANT_URL)" || { echo "QDRANT_URL is not set - the deployed backend needs the Qdrant Cloud cluster"; exit 1; }
-	@test -f data/processed/tables.duckdb || { echo "data/processed/tables.duckdb is missing - run 'make ingest' first"; exit 1; }
-	gcloud builds submit --project $(GCP_PROJECT) --config cloudbuild.yaml \
-		--substitutions _IMAGE=$(IMAGE) .
-	@# `^##^` is gcloud's alternate delimiter: CORS_ORIGINS is itself a
-	@# comma-separated list, so the default comma separator would split it
-	@# into several malformed variables.
+	@$(load_cloud_env); $(require_gcp); \
+	test -n "$$QDRANT_URL" || { echo "QDRANT_URL is not set in $(CLOUD_ENV)"; exit 1; }; \
+	test -f data/processed/tables.duckdb || { echo "data/processed/tables.duckdb is missing - run 'make ingest-cloud' first"; exit 1; }; \
+	image="$$GCP_REGION-docker.pkg.dev/$$GCP_PROJECT/$(CLOUD_RUN_SERVICE)/backend:latest"; \
+	gcloud builds submit --project "$$GCP_PROJECT" --config cloudbuild.yaml \
+		--substitutions _IMAGE="$$image" .; \
 	gcloud run deploy $(CLOUD_RUN_SERVICE) \
-		--project $(GCP_PROJECT) --region $(GCP_REGION) \
-		--image $(IMAGE) --port 8080 \
+		--project "$$GCP_PROJECT" --region "$$GCP_REGION" \
+		--image "$$image" --port 8080 \
 		--memory 1Gi --cpu 1 --min-instances 0 --max-instances 2 \
 		--cpu-boost --timeout 300 --concurrency 4 \
 		--allow-unauthenticated \
-		--set-env-vars "^##^DEPLOYMENT_MODE=cloud##QDRANT_URL=$(QDRANT_URL)##REDIS_URL=$(REDIS_URL)##CORS_ORIGINS=$(CORS_ORIGINS)" \
+		--set-env-vars "^##^DEPLOYMENT_MODE=cloud##QDRANT_URL=$$QDRANT_URL##REDIS_URL=$$REDIS_URL##CORS_ORIGINS=$$CORS_ORIGINS" \
 		--set-secrets "LLM_API_KEY=llm-api-key:latest,QDRANT_API_KEY=qdrant-api-key:latest"
+	@# `^##^` is gcloud's alternate delimiter: CORS_ORIGINS is itself a
+	@# comma-separated list, so the default comma separator would split it into
+	@# several malformed variables.
 
 deploy-url: ## Print the deployed backend URL
-	@gcloud run services describe $(CLOUD_RUN_SERVICE) \
-		--project $(GCP_PROJECT) --region $(GCP_REGION) --format 'value(status.url)'
+	@$(load_cloud_env); $(require_gcp); \
+	gcloud run services describe $(CLOUD_RUN_SERVICE) \
+		--project "$$GCP_PROJECT" --region "$$GCP_REGION" --format 'value(status.url)'
 
 deploy-check: ## Probe the deployed backend's readiness endpoint
 	@url=$$($(MAKE) -s deploy-url); echo "$$url"; \
@@ -261,3 +320,44 @@ else:
     print('\nusage: make sql S="select ..."')
 endef
 export SQL
+
+# Resolves settings the same way the deployed backend will, against the managed
+# services, and probes each one. This is `make ready` for a stack that is not
+# running locally: it catches a Qdrant URL that needs its port, and a Redis
+# without RediSearch -- which otherwise degrades quietly to the in-process
+# saver and is invisible until someone reads a log (D-017).
+define READY_CLOUD
+import json, os
+# The deployed backend never sees `.env`: Cloud Run passes DEPLOYMENT_MODE,
+# the service URLs and the secrets, and every other knob falls to its declared
+# default. So blank what `.env` would otherwise leak in -- left alone, a local
+# on-prem `.env` makes this report `ollama` and a model the deployment will
+# never load, which is the opposite of what the target is for. The API key is
+# deliberately kept: it is the one value the check genuinely needs.
+for name in ("DEPLOYMENT_MODE", "LLM_PROVIDER", "LLM_MODEL", "ROUTER_MODEL",
+             "LLM_TIMEOUT_S", "OLLAMA_BASE_URL"):
+    os.environ[name] = ""
+from app.config import Settings
+from app.api.routes import _check_checkpointer, _check_vector_store
+from app.llm.providers import any_model_present, check_llm_ready
+settings = Settings(deployment_mode="cloud")
+llm = check_llm_ready(settings)
+report = {
+    "resolved": settings.resolved_summary(),
+    "checks": {
+        "llm": {"reachable": llm.get("reachable"),
+                "models_present": llm.get("models_present"),
+                "usable": any_model_present(llm),
+                "error": llm.get("error")},
+        "vector_store": _check_vector_store(settings),
+        "checkpointer": _check_checkpointer(settings),
+    },
+}
+ok = (report["checks"]["llm"].get("reachable") and report["checks"]["llm"]["usable"]
+      and report["checks"]["vector_store"].get("ok")
+      and report["checks"]["checkpointer"].get("ok"))
+report = {"status": "ok" if ok else "degraded", **report}
+print(json.dumps(report, indent=2, default=str))
+raise SystemExit(0 if ok else 1)
+endef
+export READY_CLOUD
