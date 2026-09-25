@@ -13,7 +13,7 @@ came back was from the weakest model in the chain, after 143 seconds.
 This narrows that to one failure per model per request. The scope is
 deliberately the request and not the process: quota windows reopen, and a
 process-wide memo would keep using the weakest model long after the strongest
-one recovered. It mirrors the evidence collector's ContextVar (D-016), which is
+one recovered. It mirrors the evidence collector's ContextVar, which is
 scoped the same way and for the same reason.
 """
 

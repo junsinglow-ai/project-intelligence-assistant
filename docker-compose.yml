@@ -52,11 +52,19 @@ services:
       dockerfile: backend/Dockerfile
     env_file: .env
     environment:
+      # Passed explicitly because `env_file` alone would pin the mode to .env:
+      # a variable exported in the shell only reaches Compose interpolation,
+      # never the container. This lets `make up-onprem` (which exports
+      # DEPLOYMENT_MODE=onprem) win over .env, and falls back to .env otherwise.
+      DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-cloud}
       # The DuckDB file lives under the mounted data volume so it survives
       # container restarts; the vector index lives in the qdrant service.
       DATA_RAW_DIR: /app/data/raw
       UPLOAD_DIR: /app/data/uploads
       TABULAR_DB_PATH: /app/data/processed/tables.duckdb
+      # Beside it on the same volume, so a key issued on the host with
+      # `make api-key` is live in the container within 30 seconds.
+      API_KEYS_DB_PATH: /app/data/processed/api_keys.duckdb
       # .env points host tooling at localhost:6333; inside the Compose network
       # the same server answers to its service name. Drop this line to fall
       # back to the embedded store at QDRANT_PATH below.
@@ -64,7 +72,7 @@ services:
       QDRANT_PATH: /app/data/qdrant
       # Same pattern: .env points host tooling at localhost:6379, and inside the
       # Compose network the same server answers to its service name. Drop this
-      # line to checkpoint in-process instead (D-017).
+      # line to checkpoint in-process instead (D-007).
       REDIS_URL: redis://redis:6379/0
     ports:
       - "8000:8000"
@@ -88,6 +96,7 @@ services:
       context: ./frontend
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+        VITE_API_KEY: ${VITE_API_KEY:-}
     ports:
       - "5173:80"
     depends_on:

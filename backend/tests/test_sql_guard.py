@@ -1,4 +1,4 @@
-"""The containment around model-generated SQL (DECISIONS.md D-007).
+"""The containment around model-generated SQL (ARCHITECTURE.md §6.1).
 
 Layer 1 is `validate_select`. Layers 2 and 3 are the connection itself, and the
 last test here is the one that matters: `read_only=True` alone does **not** stop

@@ -60,7 +60,7 @@ export default function Sidebar({
 
         <div className="sidebar-footer">
           <span className={`status-dot ${status}`} aria-hidden="true" />
-          {status === "ok" ? "Backend connected" : status === "down" ? "Backend offline" : "Connecting…"}
+          {status === "ok" ? "Server connected" : status === "down" ? "Server offline" : "Connecting…"}
         </div>
       </aside>
       {open && <div className="scrim" onClick={onClose} aria-hidden="true" />}

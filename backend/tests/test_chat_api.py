@@ -25,7 +25,7 @@ def client(session_store, monkeypatch):
 
     async def answer(self, inp):
         return AgentResult(answer=f"Answered: {inp.question}", agent="data_analysis",
-                           citations=[CITATION])
+                           citations=[CITATION], model="gemini-3-flash")
 
     async def passthrough(question, history, settings=None):
         return question
@@ -51,6 +51,7 @@ def test_an_answer_carries_the_agent_the_citations_and_a_trace_id(client):
     assert response.status_code == 200
     body = response.json()
     assert body["agent"] == "data_analysis"
+    assert body["model"] == "gemini-3-flash"
     assert body["citations"][0]["source"] == "q1.pdf"
     assert body["citations"][0]["location"] == "§4. Financial position (p. 1)"
     # The body's trace ID is the one a user can quote from the response header.

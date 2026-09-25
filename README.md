@@ -9,7 +9,7 @@ An AI assistant that ingests project documents (PDF status reports, CSV/Excel fi
 > **Walkthrough video (3–5 min):** _TBD_
 >
 > Frontend on Vercel, backend on Cloud Run with Qdrant Cloud and Redis Cloud behind it — all inside
-> free tiers (DECISIONS.md D-009). The backend scales to zero, so the first request after an idle
+> free tiers (DECISIONS.md D-008). The backend scales to zero, so the first request after an idle
 > period waits for a cold start. Generation runs on Gemini's free tier, which allows 15 requests
 > per minute per model; asking questions in quick succession trips it, the model chain falls through
 > to the next model, and the limit clears within seconds.
@@ -89,7 +89,40 @@ To run with no container at all, blank `QDRANT_URL` and `REDIS_URL` in `.env`: Q
 embedded, in-process, from `QDRANT_PATH`, and the graph checkpoints in-process too. The Qdrant
 trade-off is a directory lock that only one process can hold — see below; the checkpoint trade-off
 is that graph state is lost on restart, which is what Redis is there to fix
-([DECISIONS.md](DECISIONS.md) D-017).
+([DECISIONS.md](DECISIONS.md) D-007).
+
+### Applying changes
+
+| You changed | Docker (`make up`) | Local (`make dev-*`) |
+|---|---|---|
+| Backend code | `make up` | picked up by `--reload` automatically |
+| Frontend code | `make up` | picked up by Vite hot reload automatically |
+| `.env` (backend settings) | `make up` | stop and re-run `make dev-backend` |
+| `VITE_*` in `.env` | `make up` | see note below |
+| `pyproject.toml` / `package.json` | `make up` | `make install`, then restart |
+| Documents in `data/raw` | `make ingest` | `make ingest` |
+
+`make up` is always the answer under Docker. It rebuilds any image whose code changed, and it
+recreates any container whose configuration changed. The frontend image is rebuilt when a `VITE_*`
+value changes, because those values are compiled into the bundle, not read when the container
+starts. `make restart` (a `down` then an `up`) works too. A plain `docker compose restart` does
+**not** re-read `.env`. `make rebuild` builds from scratch, which you need only when the cache is
+suspect.
+
+Only `./data` is mounted into the backend container. The code is copied into the image, so an edit
+does nothing until `make up` rebuilds it. `uvicorn --reload` watches Python files only, and the
+settings are read once at startup, so a `.env` edit needs a restart.
+
+**`VITE_*` under `make dev-frontend`:** the Vite dev server reads `.env` files from `frontend/`, not
+from the repository root. So the root `.env` does not reach it. Put `VITE_API_BASE_URL` and
+`VITE_API_KEY` in `frontend/.env`, or export them in the shell before `make dev-frontend`. Restart
+Vite after changing them. Without them, the dev server talks to `http://localhost:8000` with no
+API key.
+
+For the hosted deployment, a code or `.env.cloud` change means another `make deploy-backend`. A
+changed `LLM_API_KEY` or `QDRANT_API_KEY` means `make deploy-setup` (which writes the new secret
+version) and then `make deploy-backend`. On the frontend, a push or a redeploy on Vercel rebuilds
+it, and changing a `VITE_*` value there needs a redeploy too.
 
 ### 4. Index the documents
 ```bash
@@ -109,8 +142,7 @@ In embedded mode (blank `QDRANT_URL`) Qdrant locks its directory instead, so onl
 hold the index and the stack has to be stopped before ingesting.
 
 ### Using the UI
-Open http://localhost:5173. The layout follows Open WebUI: conversations in the left sidebar, the
-chat in the centre, a composer at the bottom.
+Open http://localhost:5173
 
 - **Ask** in the composer (Enter sends, Shift+Enter adds a line). Follow-ups in the same chat reuse
   the session, so "who prepared it?" resolves against the previous answer.
@@ -172,29 +204,64 @@ OLLAMA_BASE_URL=http://172.17.0.1:11434     # `docker network inspect bridge` sh
 `make ready` reports exactly this failure when it happens, rather than leaving it to surface as a
 timeout on the first question.
 
-**Hardware note.** The on-prem default (`qwen2.5:7b`) needs roughly 8GB of free RAM on the Ollama
-host. Below that the host swaps and requests effectively stall — measured on a 12-core CPU-only
-laptop with ~4GB free, the 7B model failed to answer within 300s while `llama3.2:3b` answered the
-same question in 154s. On a constrained host, set `LLM_MODEL=llama3.2:3b`.
+**Hardware note.** The on-prem default runs `gemma4:26b-a4b-it` for both routing and answering, and
+assumes a GPU host with the model resident. 
 
 Nothing else changes between modes. Embeddings, keyword search, re-ranking, the vector store, the
 tabular engine and the graph checkpointer all stay inside the deployment — in-process, apart from the
 Qdrant and Redis containers on the same network — and are identical either way, so **no re-index is needed** and an index built in
 cloud mode works on-prem unchanged. The trade-off is speed: on CPU-only hardware an
 on-prem answer takes 60–120s against a few seconds in cloud mode, which is why the request timeout
-also follows the mode. See [ARCHITECTURE.md](ARCHITECTURE.md) §9 and
-[DECISIONS.md](DECISIONS.md) D-010.
+also follows the mode. See [ARCHITECTURE.md](ARCHITECTURE.md) §8.
 
 The one setting that is *not* config-only is `EMBEDDING_MODEL`: vector dimensions differ between
 models, so changing it requires `make reindex`. The model name is stamped into the vector collection
 name so a mismatch fails loudly instead of returning nonsense.
+
+## API keys
+
+API keys are off by default, so the local stack and the test suite need no key. When
+`API_AUTH_ENABLED=true`, every `/v1` endpoint needs an `X-API-Key` header, except the readiness
+probe `/v1/health/dependencies`, which host health checks and `make ready` call without one. The
+unprefixed `/health` is open too. A missing or unknown key gets a `401`.
+
+```bash
+make api-key NAME=frontend          # issue a key; it is printed once and cannot be recovered
+make api-keys                       # list keys: name, prefix, created, live/revoked
+make revoke-api-key NAME=frontend   # revoke it
+```
+
+Only each key's SHA-256 digest is stored. It goes into its own DuckDB file,
+`API_KEYS_DB_PATH` (default `data/processed/api_keys.duckdb`). That file is kept apart from
+`tables.duckdb` on purpose: `tables.duckdb` is what the model's SQL can read. With auth on and no
+key file, every protected request is refused. A missing file never means the API is open.
+
+To turn it on locally:
+
+1. Issue a key with `make api-key NAME=frontend`.
+2. In `.env`, set `API_AUTH_ENABLED=true` and `VITE_API_KEY=<the key>`.
+3. Run `make up`. It rebuilds the frontend, which needs the new key because `VITE_API_KEY` is
+   baked into the bundle at build time. Under `make dev-frontend`, put `VITE_API_KEY` in
+   `frontend/.env` instead, and restart Vite
+   ([Applying changes](#applying-changes)).
+
+Keys issued or revoked on the host reach a running Compose backend within 30 seconds, through the
+`./data` bind mount. Calling the API directly:
+
+```bash
+curl -H "X-API-Key: pia_..." http://localhost:8000/v1/agents
+```
+
+**What it does not protect.** `VITE_API_KEY` ships in the JavaScript bundle, so anyone who loads the
+page can read it. It identifies the frontend and lets you revoke it. It does not keep the API
+private ([ARCHITECTURE.md](ARCHITECTURE.md) §6.2).
 
 ## Deploying
 
 The hosted demo runs the backend on **Google Cloud Run**, the frontend on **Vercel**, and keeps the
 vector index and the graph checkpoints in **Qdrant Cloud** and **Redis Cloud** — so the deployed
 system has the same shape as the Compose stack rather than a reduced variant of it. All four sit
-inside free tiers. [DECISIONS.md](DECISIONS.md) D-009 records why, and what was rejected.
+inside free tiers. [DECISIONS.md](DECISIONS.md) D-008 records why, and what was rejected.
 
 **Redis Cloud, not Upstash.** The checkpointer creates search indices, so it needs a Redis with the
 RediSearch module. Upstash has no RediSearch and the failure is quiet: `app/graph/checkpointer.py`
@@ -267,11 +334,18 @@ make deploy-url      # the backend URL, needed by the next step
 The region must be `us-central1`, `us-east1` or `us-west1` — the Cloud Run free tier covers no
 others, and `make deploy-backend` refuses the rest rather than quietly deploying a billable service.
 
+**To require API keys on the deployment:** set `API_AUTH_ENABLED=true` in `.env.cloud` and run
+`make api-key NAME=frontend` before deploying. A cloud host has no volume, so the image bakes in
+`data/processed/api_keys.duckdb` next to `tables.duckdb`. If auth is on and no key file exists,
+`make deploy-backend` refuses to deploy. Because the key store is baked in, issuing or revoking a
+key on the hosted backend takes effect only after the next `make deploy-backend`.
+
 ### 4. Deploy the frontend, then close the CORS loop
 
 On Vercel: **Root Directory `frontend`**, framework Vite, and `VITE_API_BASE_URL` set to the backend
 URL. It is read at build time (`src/api/client.js` goes through Vite's `import.meta.env`), so
-changing it later needs a rebuild, not a restart.
+changing it later needs a rebuild, not a restart. If the backend requires API keys, also set
+`VITE_API_KEY` there. It is likewise read at build time.
 
 The two URLs depend on each other, so the last step is a second backend deploy that tells it about
 the frontend:
@@ -293,13 +367,6 @@ make deploy-check
 
 Expect `status: ok`, `vector_store.mode: server`, and `checkpointer.mode: redis`. A `checkpointer`
 reading `in-process` means Redis is unreachable or has no RediSearch.
-
-### Without a GCP billing account
-
-Cloud Run has required billing since February 2026. `render.yaml` deploys the same image to Render's
-free tier instead, keeping Qdrant Cloud and Redis Cloud behind it. The cost is 512MB against a
-measured 348MB warm footprint, 0.1 vCPU for a request that runs an ONNX embedding and a
-cross-encoder re-rank, and a spin-down after 15 minutes idle.
 
 ## Dependencies
 
@@ -326,8 +393,4 @@ class RiskAgent(BaseAgent):
     system_prompt = RISK_SYSTEM
 ```
 
-`run()` is inherited: it runs the tool loop, applies the budget and collects the evidence citations are built from. Agent modules are discovered automatically and the graph is compiled from the registry, so no router, graph or API changes are needed. See `ARCHITECTURE.md` §5.5 for details.
-
-## Example questions
-
-_TBD once sample data is in place._
+`run()` is inherited: it runs the tool loop, applies the budget and collects the evidence citations are built from. Agent modules are discovered automatically and the graph is compiled from the registry, so no router, graph or API changes are needed. See `ARCHITECTURE.md` §4.5 for details.

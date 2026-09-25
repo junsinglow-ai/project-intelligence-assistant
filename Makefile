@@ -14,8 +14,8 @@ CLOUD_ENV ?= .env.cloud
 
 .DEFAULT_GOAL := help
 .PHONY: help env up up-onprem down restart build rebuild logs logs-backend logs-frontend ps \
-        qdrant redis ready models ingest reindex query sql shell-backend shell-frontend clean install dev-backend dev-frontend test \
-        data eval lock upgrade ingest-cloud reindex-cloud ready-cloud \
+        qdrant redis ready models ingest reindex query sql api-key api-keys revoke-api-key shell-backend shell-frontend clean install dev-backend dev-frontend test \
+        data eval bench-embeddings lock upgrade ingest-cloud reindex-cloud ready-cloud \
         deploy-setup deploy-backend deploy-url deploy-check \
         logs-cloud logs-cloud-errors logs-cloud-trace
 
@@ -109,6 +109,20 @@ query: ## Retrieve chunks for a question: make query Q="which risk is largest?"
 sql: ## Query the structured store read-only: make sql S="select * from risk_register"
 	@S="$(S)" uv run --directory $(BACKEND) python -c "$$SQL"
 
+# --- API keys ---------------------------------------------------------------
+# Enforced only when API_AUTH_ENABLED=true. Keys go to API_KEYS_DB_PATH, a
+# DuckDB file of their own, as SHA-256 digests; the key is printed once and
+# cannot be recovered. Writes from the host reach a running stack through the
+# ./data bind mount (ARCHITECTURE.md §6.2).
+api-key: ## Issue an API key: make api-key NAME=frontend
+	@NAME="$(NAME)" uv run --directory $(BACKEND) python -c "$$API_KEY_CREATE"
+
+api-keys: ## List issued API keys (name, prefix, created, revoked)
+	@uv run --directory $(BACKEND) python -c "$$API_KEY_LIST"
+
+revoke-api-key: ## Revoke an API key: make revoke-api-key NAME=frontend
+	@NAME="$(NAME)" uv run --directory $(BACKEND) python -c "$$API_KEY_REVOKE"
+
 shell-backend: ## Open a shell in the backend container
 	$(COMPOSE) exec backend bash
 
@@ -142,9 +156,17 @@ data: ## Regenerate the synthetic sample documents in data/raw
 	uv run --project $(BACKEND) --group data python data/scripts/generate_synthetic_data.py
 
 eval: ## Run the RAGAS evaluation into eval/results
-	uv run --project $(BACKEND) python eval/run_ragas.py
+	uv run --directory $(BACKEND) --group eval python ../eval/run_ragas.py $(ARGS)
 
-# --- Deployment (DECISIONS.md D-009) --------------------------------------
+# Separate from `make eval` on purpose: there is no judge model here, so the
+# numbers are deterministic and comparable across runs and across deployment
+# modes, which the RAGAS scores are not. Indexes into its own `eval_docs__*`
+# collections and a scratch DuckDB, so it never touches what the application
+# serves from. Downloads ~2.1GB of ONNX weights on the first run.
+bench-embeddings: ## Benchmark embedding models on retrieval quality into eval/results
+	@uv run --directory $(BACKEND) --group bench python ../eval/embedding_bench.py $(ARGS)
+
+# --- Deployment (DECISIONS.md D-008) --------------------------------------
 # Backend on Cloud Run, frontend on Vercel, with Qdrant Cloud and Redis Cloud
 # behind them.
 #
@@ -172,7 +194,8 @@ env_file="$(CLOUD_ENV)"; \
 case "$$env_file" in /*) ;; *) env_file="./$$env_file" ;; esac; \
 test -f "$$env_file" || { echo "$(CLOUD_ENV) is missing - run 'make env' and fill it in"; exit 1; }; \
 set -a; if [ -f ./.env ]; then . ./.env; fi; . "$$env_file"; set +a; \
-for v in DEPLOYMENT_MODE LLM_PROVIDER LLM_MODEL ROUTER_MODEL LLM_TIMEOUT_S OLLAMA_BASE_URL; do \
+for v in DEPLOYMENT_MODE LLM_PROVIDER LLM_MODEL ROUTER_MODEL LLM_TIMEOUT_S OLLAMA_BASE_URL \
+	$$(env | sed -n 's/^\(AGENT_MODELS__[A-Za-z0-9_]*\)=.*/\1/p'); do \
 	grep -qE "^[[:space:]]*$$v=" "$$env_file" || unset "$$v"; \
 done; \
 : $${GCP_REGION:=us-central1}
@@ -252,7 +275,7 @@ deploy-setup: ## One-time: enable the APIs, create the registry and both secrets
 # AGENT_MAX_TOOL_CALLS is pinned rather than left to the code default of 3.
 # Every extra tool call is another generation, and on a free tier each
 # generation may pay a 429 fallthrough, so the budget is the latency knob in
-# cloud mode exactly as it is on-prem (ARCHITECTURE.md section 7.1).
+# cloud mode exactly as it is on-prem (ARCHITECTURE.md §2.1).
 #
 # `&&` between build and deploy, not `;`: a failed build otherwise rolls straight
 # on to deploying an image that was never pushed, and the useful error scrolls
@@ -261,6 +284,8 @@ deploy-backend: ## Build and deploy the backend image to Cloud Run
 	@$(load_cloud_env); $(require_gcp); set -e; \
 	test -n "$$QDRANT_URL" || { echo "QDRANT_URL is not set in $(CLOUD_ENV)"; exit 1; }; \
 	test -f data/processed/tables.duckdb || { echo "data/processed/tables.duckdb is missing - run 'make ingest-cloud' first"; exit 1; }; \
+	case "$${API_AUTH_ENABLED:-false}" in true|1) test -f data/processed/api_keys.duckdb \
+		|| { echo "API_AUTH_ENABLED is on but no keys exist - run 'make api-key NAME=frontend' first"; exit 1; } ;; esac; \
 	image="$$GCP_REGION-docker.pkg.dev/$$GCP_PROJECT/$(CLOUD_RUN_SERVICE)/backend:latest"; \
 	gcloud builds submit --project "$$GCP_PROJECT" --config cloudbuild.yaml \
 		--substitutions _IMAGE="$$image" . && \
@@ -270,7 +295,7 @@ deploy-backend: ## Build and deploy the backend image to Cloud Run
 		--memory 1Gi --cpu 1 --min-instances 0 --max-instances 2 \
 		--cpu-boost --timeout 300 --concurrency 4 \
 		--allow-unauthenticated \
-		--set-env-vars "^##^DEPLOYMENT_MODE=cloud##QDRANT_URL=$$QDRANT_URL##REDIS_URL=$$REDIS_URL##CORS_ORIGINS=$$CORS_ORIGINS##AGENT_MAX_TOOL_CALLS=$${AGENT_MAX_TOOL_CALLS:-2}" \
+		--set-env-vars "^##^DEPLOYMENT_MODE=cloud##QDRANT_URL=$$QDRANT_URL##REDIS_URL=$$REDIS_URL##CORS_ORIGINS=$$CORS_ORIGINS##AGENT_MAX_TOOL_CALLS=$${AGENT_MAX_TOOL_CALLS:-2}##API_AUTH_ENABLED=$${API_AUTH_ENABLED:-false}" \
 		--set-secrets "LLM_API_KEY=llm-api-key:latest,QDRANT_API_KEY=qdrant-api-key:latest"
 	@# `^##^` is gcloud's alternate delimiter: CORS_ORIGINS is itself a
 	@# comma-separated list, so the default comma separator would split it into
@@ -328,9 +353,12 @@ from ollama import Client
 from app.config import Settings
 
 settings = Settings(deployment_mode="onprem")
-client = Client(host=settings.ollama_base_url, timeout=600)
-print(f"Ollama host: {settings.ollama_base_url}")
-for model in (settings.llm_model, settings.router_model):
+# `ollama` is the Compose service name, which resolves only inside the stack.
+# This runs on the host, where the bundled container is published on localhost.
+host = settings.ollama_base_url.replace("://ollama:", "://localhost:")
+client = Client(host=host, timeout=600)
+print(f"Ollama host: {host}")
+for model in settings.configured_models:
     print(f"  pulling {model} ...", flush=True)
     try:
         client.pull(model)
@@ -398,11 +426,50 @@ else:
 endef
 export SQL
 
+define API_KEY_CREATE
+import os, sys
+from app.api.auth import HEADER, create_key
+from app.config import get_settings
+name = os.environ.get("NAME") or sys.exit("usage: make api-key NAME=<client>")
+try:
+    key = create_key(name)
+except Exception as exc:
+    sys.exit(f"{type(exc).__name__}: {exc}")
+settings = get_settings()
+print(f"API key for {name!r} (shown once; only its hash is stored in {settings.api_keys_db_path}):\n")
+print(f"  {key}\n")
+print(f"Send it as the {HEADER} header, or set VITE_API_KEY for the frontend.")
+if not settings.api_auth_enabled:
+    print("Note: API_AUTH_ENABLED is false, so the backend does not check keys yet.")
+endef
+export API_KEY_CREATE
+
+define API_KEY_LIST
+from app.api.auth import list_keys
+keys = list_keys()
+if not keys:
+    print("No API keys issued. make api-key NAME=<client>")
+for k in keys:
+    state = f"revoked {k.revoked_at:%Y-%m-%d %H:%M}" if k.revoked_at else "live"
+    print(f"{k.name:20} {k.key_prefix}...  created {k.created_at:%Y-%m-%d %H:%M}  {state}")
+endef
+export API_KEY_LIST
+
+define API_KEY_REVOKE
+import os, sys
+from app.api.auth import revoke_key
+name = os.environ.get("NAME") or sys.exit("usage: make revoke-api-key NAME=<client>")
+if not revoke_key(name):
+    sys.exit(f"No live key named {name!r} (see make api-keys)")
+print(f"Revoked {name!r}; a running backend stops accepting it within 30 seconds.")
+endef
+export API_KEY_REVOKE
+
 # Resolves settings the same way the deployed backend will, against the managed
 # services, and probes each one. This is `make ready` for a stack that is not
 # running locally: it catches a Qdrant URL that needs its port, and a Redis
 # without RediSearch -- which otherwise degrades quietly to the in-process
-# saver and is invisible until someone reads a log (D-017).
+# saver and is invisible until someone reads a log (D-007).
 define READY_CLOUD
 import json, os
 # The deployed backend never sees `.env`: Cloud Run passes DEPLOYMENT_MODE,
@@ -413,6 +480,15 @@ import json, os
 # deliberately kept: it is the one value the check genuinely needs.
 for name in ("DEPLOYMENT_MODE", "LLM_PROVIDER", "LLM_MODEL", "ROUTER_MODEL",
              "LLM_TIMEOUT_S", "OLLAMA_BASE_URL"):
+    os.environ[name] = ""
+# Per-agent overrides in `.env` are local too. Blanked (not deleted, which would
+# fall through to the file) for every key either place names.
+from pathlib import Path
+for env_file in (Path(".env"), Path("../.env")):
+    for line in env_file.read_text().splitlines() if env_file.exists() else []:
+        if line.startswith("AGENT_MODELS__"):
+            os.environ[line.split("=", 1)[0].strip()] = ""
+for name in [n for n in os.environ if n.startswith("AGENT_MODELS__")]:
     os.environ[name] = ""
 from app.config import Settings
 from app.api.routes import _check_checkpointer, _check_vector_store

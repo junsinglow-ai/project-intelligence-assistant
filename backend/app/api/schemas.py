@@ -26,6 +26,9 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     agent: str
+    # The model that wrote the answer -- a fallback when the primary was out of
+    # quota. None when the agent failed before any model answered.
+    model: str | None = None
     citations: list[Citation] = []
     session_id: str
     trace_id: str

@@ -1,0 +1,409 @@
+# Retrieval-quality query set for the embedding benchmark (eval/embedding_bench.py).
+#
+# Gold labels are CHUNK-level, keyed by (source, citation). That pair is unique
+# across all 38 chunks in the corpus, and chunk identity comes from
+# `make_id(source, *parts)` in app/ingestion/chunking.py -- UUIDv5 over structure,
+# with no embedding input -- so one label file is valid for every embedding model.
+#
+# Chunk-level rather than file-level because file-level saturates: the corpus is
+# 38 chunks across 6 files and TOP_K=8 retrieves 21% of it, so file-level recall@5
+# is already 0.89 for every configuration and cannot separate two embedders.
+#
+# Tiers, so a result can be read by difficulty rather than as one blended number:
+#   lexical    - the manifest's own wording. Regression check; BM25 does well here.
+#   paraphrase - same information need, vocabulary deliberately shifted off the
+#                documents' phrasing. Where a stronger embedder should pay off.
+#   semantic   - indirect phrasing, near-zero lexical overlap. Most diagnostic.
+#   negative   - nothing in the corpus answers this. Scored separately (see below),
+#                never folded into recall/MRR.
+#
+# HONESTY RULE: these labels were authored against the chunk texts BEFORE any model
+# was swept, and are not revised after seeing results. Changing a label to improve a
+# score invalidates the comparison. If a label is wrong, fix it and re-run every arm.
+
+version: 1
+corpus: data/raw            # Conduit Unified LLM Gateway (CND-26), manifest seed 11
+chunk_count: 38
+
+queries:
+
+  # ---------------------------------------------------------------- lexical --
+  # The eight usable questions from data/manifest.json, verbatim. The manifest's
+  # ninth ("what does the memo say about the budget") is M1 in the negative-ish
+  # set below: it IS answerable, from the memo's own statement that it omits the
+  # financials, so it is kept as a retrieval target rather than a negative.
+
+  - id: L1
+    tier: lexical
+    question: "What is the approved budget for Conduit Unified LLM Gateway?"
+    gold:
+      - {source: Conduit_Unified_LLM_Gateway_Financial_Summary_FY26.xlsx, citation: "Summary!total row"}
+      - {source: conduit_unified_llm_gateway_financials_export.csv, citation: "total row"}
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "§4. Financial position (p. 1)"}
+    why: "6,315,000 USD appears as the TOTAL budget in both tabular exports and in the Q3 financial table."
+
+  - id: L2
+    tier: lexical
+    question: "How much had been spent by the end of 2026-Q3?"
+    gold:
+      - {source: Conduit_Unified_LLM_Gateway_Financial_Summary_FY26.xlsx, citation: "Summary!total row"}
+      - {source: conduit_unified_llm_gateway_financials_export.csv, citation: "total row"}
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "§4. Financial position (p. 1)"}
+    why: "5,183,000 USD / 82 pct of approved budget."
+
+  - id: L3
+    tier: lexical
+    question: "Is the project over or under budget as at 2026-Q3?"
+    gold:
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "§4. Financial position (p. 1)"}
+      - {source: Conduit_Unified_LLM_Gateway_Financial_Summary_FY26.xlsx, citation: "Summary!total row"}
+      - {source: conduit_unified_llm_gateway_financials_export.csv, citation: "total row"}
+    why: "Variance 1,132,000 USD, annotated 'Under budget' in the Q3 report."
+
+  - id: L4
+    tier: lexical
+    question: "Which cost category carries the largest approved budget?"
+    gold:
+      - {source: Conduit_Unified_LLM_Gateway_Financial_Summary_FY26.xlsx, citation: "Summary!rows 5-8"}
+      - {source: conduit_unified_llm_gateway_financials_export.csv, citation: "rows 2-5"}
+    why: "ENG-01 Platform engineering, budget 2,400,000 -- the largest line, in the first block of cost rows."
+
+  - id: L5
+    tier: lexical
+    question: "How many risks are currently open?"
+    gold:
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 2-3"}
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 4-5"}
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 6-7"}
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 8-9"}
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 10-11"}
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 12-13"}
+    why: "Counting requires the whole register; every row chunk is relevant evidence."
+
+  - id: L6
+    tier: lexical
+    question: "Which risk has the highest financial exposure, and who owns it?"
+    gold:
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 4-5"}
+    why: "R-003, exposure $520,000, owner Yusuf Karim."
+
+  - id: L7
+    tier: lexical
+    question: "Which risks have no mitigation recorded?"
+    gold:
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 12-13"}
+    why: "R-011 has 'mitigation: not recorded'."
+
+  - id: L8
+    tier: lexical
+    question: "What was the overall status in each reporting period?"
+    gold:
+      - {source: Conduit_Unified_LLM_Gateway_Status_Report_2026-Q1.pdf, citation: "document header"}
+      - {source: conduit_unified_llm_gateway-status-memo-jun2026.pdf, citation: "document header"}
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "document header"}
+    why: "Overall status is recorded in each report's header block: green / amber / amber."
+
+  # ------------------------------------------------------------- paraphrase --
+  # Same information needs as above and below, with the documents' own wording
+  # deliberately avoided.
+
+  - id: P1
+    tier: paraphrase
+    question: "How much money was signed off for this programme at the outset?"
+    gold:
+      - {source: Conduit_Unified_LLM_Gateway_Financial_Summary_FY26.xlsx, citation: "Summary!total row"}
+      - {source: conduit_unified_llm_gateway_financials_export.csv, citation: "total row"}
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "§4. Financial position (p. 1)"}
+    why: "L1 without the phrase 'approved budget'."
+
+  - id: P2
+    tier: paraphrase
+    question: "Are we spending less than we planned to by now?"
+    gold:
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "§4. Financial position (p. 1)"}
+      - {source: Conduit_Unified_LLM_Gateway_Financial_Summary_FY26.xlsx, citation: "Summary!total row"}
+      - {source: conduit_unified_llm_gateway_financials_export.csv, citation: "total row"}
+    why: "L3 without 'over/under budget' or 'variance'."
+
+  - id: P3
+    tier: paraphrase
+    question: "Where is most of the money going?"
+    gold:
+      - {source: Conduit_Unified_LLM_Gateway_Financial_Summary_FY26.xlsx, citation: "Summary!rows 5-8"}
+      - {source: conduit_unified_llm_gateway_financials_export.csv, citation: "rows 2-5"}
+    why: "L4 without 'cost category' or 'budget'. Platform engineering is the largest line."
+
+  - id: P4
+    tier: paraphrase
+    question: "Which problem could cost us the most if it happens?"
+    gold:
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 4-5"}
+    why: "L6 without 'risk' or 'exposure'."
+
+  - id: P5
+    tier: paraphrase
+    question: "Is there anything on the register with no plan to deal with it?"
+    gold:
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 12-13"}
+    why: "L7 without 'mitigation'."
+
+  - id: P6
+    tier: paraphrase
+    question: "Has the health rating of this project changed over time?"
+    gold:
+      - {source: Conduit_Unified_LLM_Gateway_Status_Report_2026-Q1.pdf, citation: "document header"}
+      - {source: conduit_unified_llm_gateway-status-memo-jun2026.pdf, citation: "document header"}
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "document header"}
+    why: "L8 without 'overall status' or 'reporting period'."
+
+  - id: P7
+    tier: paraphrase
+    question: "How responsive is the service now compared with earlier in the year?"
+    gold:
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "§2. Progress this period (p. 1)"}
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "§1. Executive summary (p. 1)"}
+      - {source: Conduit_Unified_LLM_Gateway_Status_Report_2026-Q1.pdf, citation: "§2. Progress this period (p. 1)"}
+    why: "p95 latency 820ms in Q1, cut from 1,140ms to 690ms in Q3. Avoids 'latency' and 'p95'."
+
+  - id: P8
+    tier: paraphrase
+    question: "What happened to make the service unavailable in May?"
+    gold:
+      - {source: conduit_unified_llm_gateway-status-memo-jun2026.pdf, citation: "§1. Executive summary (p. 1)"}
+      - {source: conduit_unified_llm_gateway-status-memo-jun2026.pdf, citation: "§6. Issues and decisions required (p. 2)"}
+    why: "The 14 May rate-limit cascade took availability to 99.71%."
+
+  - id: P9
+    tier: paraphrase
+    question: "Did the security certification come through?"
+    gold:
+      - {source: conduit_unified_llm_gateway-status-memo-jun2026.pdf, citation: "§2. Progress this period (p. 1)"}
+      - {source: conduit_unified_llm_gateway-status-memo-jun2026.pdf, citation: "§3. Milestones (p. 1)"}
+    why: "SOC 2 Type I awarded 12 June without exceptions. Avoids 'SOC 2'."
+
+  - id: P10
+    tier: paraphrase
+    question: "Which supplier is winding down their involvement?"
+    gold:
+      - {source: Conduit_Unified_LLM_Gateway_Financial_Summary_FY26.xlsx, citation: "Summary!rows 9-12"}
+      - {source: conduit_unified_llm_gateway_financials_export.csv, citation: "rows 6-9"}
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 12-13"}
+    why: "Northcape Labs (VEN-01) ramping down through October; R-012 covers the consequence."
+
+  - id: P11
+    tier: paraphrase
+    question: "Who do we call if the billing component breaks after October?"
+    gold:
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 12-13"}
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "§6. Issues and decisions required (p. 2)"}
+    why: "R-012: billing and two adapters have one owner each once Northcape rolls off."
+
+  - id: P12
+    tier: paraphrase
+    question: "Which line item has already gone past what was set aside for it?"
+    gold:
+      - {source: Conduit_Unified_LLM_Gateway_Financial_Summary_FY26.xlsx, citation: "Summary!rows 5-8"}
+      - {source: conduit_unified_llm_gateway_financials_export.csv, citation: "rows 2-5"}
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "§6. Issues and decisions required (p. 2)"}
+    why: "MOD-01 provider token spend, 1,585,000 against 1,450,000, pct_spent 1.09."
+
+  - id: P13
+    tier: paraphrase
+    question: "Why can't teams be billed accurately for what they used?"
+    gold:
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 10-11"}
+      - {source: Conduit_Unified_LLM_Gateway_Status_Report_2026-Q1.pdf, citation: "§6. Issues and decisions required (p. 2)"}
+      - {source: Conduit_Unified_LLM_Gateway_Status_Report_2026-Q1.pdf, citation: "§2. Progress this period (p. 1)"}
+    why: "R-009 metering lag up to 36 hours makes chargeback estimates unreliable."
+
+  - id: P14
+    tier: paraphrase
+    question: "What was done about holding on to user data for too long?"
+    gold:
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 4-5"}
+      - {source: conduit_unified_llm_gateway-status-memo-jun2026.pdf, citation: "§5. Key risks (p. 1)"}
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "§2. Progress this period (p. 1)"}
+    why: "R-003: retention cut 30 days -> 72 hours with field-level redaction."
+
+  - id: P15
+    tier: paraphrase
+    question: "Where did the extra funding for the second data centre come from?"
+    gold:
+      - {source: Conduit_Unified_LLM_Gateway_Financial_Summary_FY26.xlsx, citation: "Notes!rows 2-4"}
+      - {source: Conduit_Unified_LLM_Gateway_Financial_Summary_FY26.xlsx, citation: "Summary!rows 9-12"}
+      - {source: conduit_unified_llm_gateway_financials_export.csv, citation: "rows 6-9"}
+    why: "120k contingency drawdown approved for the multi-region control plane (CON-01 / Notes)."
+
+  # --------------------------------------------------------------- semantic --
+  # Indirect phrasing with near-zero lexical overlap with the target chunk.
+
+  - id: S1
+    tier: semantic
+    question: "Are we burning through the money faster than we expected?"
+    gold:
+      - {source: conduit_unified_llm_gateway-status-memo-jun2026.pdf, citation: "§1. Executive summary (p. 1)"}
+      - {source: conduit_unified_llm_gateway-status-memo-jun2026.pdf, citation: "§6. Issues and decisions required (p. 2)"}
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "§6. Issues and decisions required (p. 2)"}
+    why: "Token consumption grew far faster than plan; provider cost materially ahead of profile."
+
+  - id: S2
+    tier: semantic
+    question: "What would break if one of our suppliers retired an old version?"
+    gold:
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 8-9"}
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "§5. Key risks (pp. 1-2)"}
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "§7. Focus for next period (p. 2)"}
+    why: "R-008: upstream model deprecations break customer-pinned model IDs in November."
+
+  - id: S3
+    tier: semantic
+    question: "If one team misbehaves, can they take everyone else down?"
+    gold:
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 2-3"}
+      - {source: Conduit_Unified_LLM_Gateway_Status_Report_2026-Q1.pdf, citation: "§5. Key risks (pp. 1-2)"}
+      - {source: conduit_unified_llm_gateway-status-memo-jun2026.pdf, citation: "§5. Key risks (p. 1)"}
+    why: "R-002: quotas apply per organisation, so one batch job throttles every caller."
+
+  - id: S4
+    tier: semantic
+    question: "What happens if somebody's credential leaks?"
+    gold:
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 8-9"}
+    why: "R-007: no rotation endpoint, so a leaked key stays valid until noticed."
+
+  - id: S5
+    tier: semantic
+    question: "Could losing one site take the whole thing offline?"
+    gold:
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 4-5"}
+      - {source: conduit_unified_llm_gateway-status-memo-jun2026.pdf, citation: "§5. Key risks (p. 1)"}
+    why: "R-004: single-region control plane is a single point of failure; now closed."
+
+  - id: S6
+    tier: semantic
+    question: "Did answers ever get cut off halfway through?"
+    gold:
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 6-7"}
+      - {source: conduit_unified_llm_gateway-status-memo-jun2026.pdf, citation: "§1. Executive summary (p. 1)"}
+      - {source: conduit_unified_llm_gateway-status-memo-jun2026.pdf, citation: "§2. Progress this period (p. 1)"}
+    why: "R-005 / the buffering regression truncated long completions for six days."
+
+  - id: S7
+    tier: semantic
+    question: "Is picking the quickest option hurting the quality of what comes back?"
+    gold:
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 12-13"}
+    why: "R-011: routing on latency alone sends long-context requests to the fastest, not the best."
+
+  - id: S8
+    tier: semantic
+    question: "Are we locked into prices agreed before demand took off?"
+    gold:
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 6-7"}
+    why: "R-006: two of three contracts renew in Q1 2027 with volumes set before demand grew."
+
+  - id: S9
+    tier: semantic
+    question: "How long does it take to recover from losing a region?"
+    gold:
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "§2. Progress this period (p. 1)"}
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "§3. Milestones (p. 1)"}
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 4-5"}
+    why: "Failover exercise completed in eleven minutes."
+
+  - id: S10
+    tier: semantic
+    question: "What is still being done by hand that ought to be automated?"
+    gold:
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 10-11"}
+    why: "R-010: evidence for five of nineteen controls is still collected by hand."
+
+  - id: S11
+    tier: semantic
+    question: "Was any of our spend actually somebody else's to pay?"
+    gold:
+      - {source: Conduit_Unified_LLM_Gateway_Financial_Summary_FY26.xlsx, citation: "Notes!rows 2-4"}
+    why: "The search team's evaluation harness run was charged to MOD-01; chargeback still pending."
+
+  - id: S12
+    tier: semantic
+    question: "Why does the early-quarter cost look higher than what we actually consumed?"
+    gold:
+      - {source: Conduit_Unified_LLM_Gateway_Financial_Summary_FY26.xlsx, citation: "Notes!rows 2-4"}
+    why: "Credits are pre-purchased each quarter and expire unused, so MOD-01 runs ahead of consumption."
+
+  - id: S13
+    tier: semantic
+    question: "When did this stop being an experiment and start being the default way in?"
+    gold:
+      - {source: Conduit_Unified_LLM_Gateway_Status_Report_2026-Q1.pdf, citation: "§1. Executive summary (p. 1)"}
+      - {source: Conduit_Unified_LLM_Gateway_Status_Report_2026-Q1.pdf, citation: "§2. Progress this period (p. 1)"}
+      - {source: Conduit_Unified_LLM_Gateway_Status_Report_2026-Q1.pdf, citation: "§3. Milestones (p. 1)"}
+    why: "Internal GA on 27 February with five pilot teams migrated off direct provider SDKs."
+
+  - id: S14
+    tier: semantic
+    question: "How much traffic was the platform handling?"
+    gold:
+      - {source: Conduit_Unified_LLM_Gateway_Status_Report_2026-Q1.pdf, citation: "§1. Executive summary (p. 1)"}
+    why: "An average of 41 million tokens a day in the final month of the quarter."
+
+  - id: S15
+    tier: semantic
+    question: "Which quarter did we spend the most in?"
+    gold:
+      - {source: Conduit_Unified_LLM_Gateway_Financial_Summary_FY26.xlsx, citation: "By Period!rows 2-5"}
+      - {source: Conduit_Unified_LLM_Gateway_Financial_Summary_FY26.xlsx, citation: "By Period!rows 6-9"}
+    why: "The By Period sheet is the only per-quarter breakdown; 2026-Q3 is the largest."
+
+  - id: S16
+    tier: semantic
+    question: "Which report is missing its numbers?"
+    gold:
+      - {source: conduit_unified_llm_gateway-status-memo-jun2026.pdf, citation: "§1. Executive summary (p. 1)"}
+    why: "The Q2 memo states no financial position is included; a reforecast lands with Q3. This is the manifest's ninth fact, and the memo says so itself, so it is a retrieval target."
+
+  - id: S17
+    tier: semantic
+    question: "What did we stop people doing to keep costs under control?"
+    gold:
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "§2. Progress this period (p. 1)"}
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "§1. Executive summary (p. 1)"}
+      - {source: conduit_unified_llm_gateway_risk_register_v4.csv, citation: "rows 2-3"}
+    why: "Per-key budget caps and hard spend stops shipped 22 July; incidents fell from seven to one."
+
+  - id: S18
+    tier: semantic
+    question: "What is the team planning to work on next?"
+    gold:
+      - {source: CND-26_PSR_2026-09-18.pdf, citation: "§7. Focus for next period (p. 2)"}
+    why: "Latest report's forward look: knowledge transfer, model ID migration, closing SOC 2 Type II."
+
+  # --------------------------------------------------------------- negative --
+  # Nothing in the corpus answers these. Scored separately: reported as the mean
+  # top-1 similarity score, so a model that confidently surfaces something for an
+  # unanswerable question is visible. Never folded into recall or MRR.
+
+  - id: N1
+    tier: negative
+    question: "What is the staff turnover rate on the project team?"
+    gold: []
+    why: "No headcount or HR data anywhere in the corpus."
+
+  - id: N2
+    tier: negative
+    question: "Which university did the project sponsor attend?"
+    gold: []
+    why: "Sofia Almeida appears only as a name and job title."
+
+  - id: N3
+    tier: negative
+    question: "What is the carbon footprint of the gateway?"
+    gold: []
+    why: "No sustainability or energy reporting in the corpus."
+
+  - id: N4
+    tier: negative
+    question: "How many customer complaints were received in 2026-Q2?"
+    gold: []
+    why: "Incidents are reported, but never customer complaints."

@@ -2,10 +2,10 @@
 
 `REDIS_URL` selects between them. Blank keeps the `InMemorySaver` the graph
 started with, which is what the test suite and a single-process run want; the
-Compose stack points it at the redis service. See DECISIONS.md D-017.
+Compose stack points it at the redis service. See DECISIONS.md D-007.
 
 What the checkpoint holds is graph state, not conversation context. Follow-ups
-are still rewritten into standalone questions (D-013), so the prompt an agent
+are still rewritten into standalone questions (D-007), so the prompt an agent
 sees is one question and its tool results however long the conversation runs.
 That is also why an unreachable Redis degrades to the in-process saver rather
 than failing the request: nothing resumes mid-graph today, so a checkpoint the
@@ -63,7 +63,7 @@ def get_checkpointer() -> BaseCheckpointSaver:
         # Seconds. The default is short enough that a managed Redis in another
         # region fails a request outright, and a read timeout happens well
         # after `ensure_checkpointer_ready` could have degraded to the
-        # in-process saver, so it surfaces as a failed answer (D-017).
+        # in-process saver, so it surfaces as a failed answer (D-007).
         connection_args={
             "socket_timeout": settings.redis_timeout_s,
             "socket_connect_timeout": settings.redis_timeout_s,

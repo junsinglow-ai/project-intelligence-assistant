@@ -1,4 +1,4 @@
-"""The chat graph: rewrite, routing and the failure rules of section 5.4.
+"""The chat graph: rewrite, routing and the failure rules of ARCHITECTURE.md section 4.4.
 
 These drive the graph directly rather than through `/v1/chat`, so each node's
 behaviour is asserted on its own. Routing and the agents are stubbed, because
@@ -190,3 +190,35 @@ async def test_an_evicted_session_drops_its_checkpoint_thread(routed, answers):
     store.append("new-session", "q", "a", "document_qa")     # evicts old-session
 
     assert saver.get_tuple({"configurable": {"thread_id": "old-session"}}) is None
+
+
+# -- evaluation ------------------------------------------------------------
+
+
+async def test_an_evidence_tap_sees_the_full_evidence_through_the_graph(routed, monkeypatch):
+    """The RAGAS runner scores faithfulness against this, not the citation snippets.
+
+    The collector is opened inside an agent node, which LangGraph runs in its own
+    task, so what is asserted is that the tap set outside the graph reaches it.
+    """
+    from app.skills.evidence import evidence_scope, evidence_tap
+
+    async def run(self, inp):
+        with evidence_scope() as evidence:
+            evidence.record(["x" * 500])
+        return AgentResult(answer="answered", agent=self.name)
+
+    monkeypatch.setattr(DocumentQAAgent, "run", run)
+    routed()
+
+    with evidence_tap() as tapped:
+        await run_chat_graph("What happened?", "s1")
+
+    assert [e.items for e in tapped] == [["x" * 500]]
+
+
+async def test_no_tap_is_open_outside_an_evaluation():
+    from app.skills.evidence import _tap_var, evidence_scope
+
+    with evidence_scope():
+        assert _tap_var.get() is None

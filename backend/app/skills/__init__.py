@@ -8,5 +8,5 @@ trap entirely.
 
 Every skill is read-only and runs in-process: retrieval, a schema listing and a
 guarded read-only SELECT. That is what replaces the "answering agents have no
-tools" control described in ARCHITECTURE.md section 8.1 (see DECISIONS.md D-015).
+tools" control described in ARCHITECTURE.md §6.1 (see DECISIONS.md D-005).
 """

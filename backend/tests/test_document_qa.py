@@ -165,7 +165,7 @@ async def test_a_second_search_adds_to_the_evidence_rather_than_replacing_it(
 
 async def test_the_tool_budget_declines_further_searches(
         scripted_llm, stub_retrieval, monkeypatch):
-    """On-prem, each extra turn is minutes; the budget is a cost control (D-015).
+    """On-prem, each extra turn is minutes; the budget is a cost control (D-005).
 
     Declining rather than failing is the point: the third search comes back as a
     refusal the model can read, so it still answers from the two it did get.

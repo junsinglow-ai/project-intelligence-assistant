@@ -16,8 +16,7 @@ logger = logging.getLogger(__name__)
 # Where a route goes when the model cannot be trusted with the choice: an
 # unknown agent name, confidence below the floor, or the routing call failing
 # outright. `small_talk` declines cleanly and says what the assistant covers,
-# rather than searching a corpus the question may have nothing to do with
-# (DECISIONS.md D-018).
+# rather than searching a corpus the question may have nothing to do with.
 FALLBACK_AGENT = "small_talk"
 MIN_CONFIDENCE = 0.5
 
@@ -39,7 +38,7 @@ def _normalised(decision: RouteDecision) -> RouteDecision:
     """Repair the shapes a small model produces without changing its choice.
 
     Structured output guarantees the JSON *shape* -- on Ollama the schema is
-    enforced by constrained decoding -- but not its meaning. A 3B model asked
+    enforced by constrained decoding -- but not its meaning. A small model asked
     for a 0-1 confidence readily answers `95`, meaning 95%, which would sail
     past `MIN_CONFIDENCE` and be recorded as nonsense. Repairing it here rather
     than constraining the field keeps a correct route that was merely reported
@@ -69,20 +68,22 @@ class RouterAgent(BaseAgent):
         from app.config import get_settings
         from app.llm.prompts import ROUTER_PROMPT
         from app.llm.providers import get_structured_llm
+        from app.llm.usage import call_site
 
         settings = get_settings()
         routable = list_agents()
         chain = ROUTER_PROMPT | get_structured_llm(
-            RouteDecision, settings.router_models, settings
+            RouteDecision, settings.models_for(self.name), settings
         )
         # The question is already standalone, so the conversation adds nothing
         # here but tokens -- and prompt length is the on-prem latency lever.
-        decision = await chain.ainvoke({
-            "catalogue": self.agent_catalogue(),
-            "names": ", ".join(a.name for a in routable),
-            "fallback": FALLBACK_AGENT,
-            "question": inp.question,
-        })
+        with call_site(self.name):
+            decision = await chain.ainvoke({
+                "catalogue": self.agent_catalogue(),
+                "names": ", ".join(a.name for a in routable),
+                "fallback": FALLBACK_AGENT,
+                "question": inp.question,
+            })
         return _normalised(decision)
 
     async def route(self, inp: AgentInput) -> RouteDecision:

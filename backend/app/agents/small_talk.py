@@ -7,7 +7,7 @@ nothing and is refused; it is not a general-purpose chat model wearing a badge.
 
 It is also `router.FALLBACK_AGENT`, which is the heavier half of the job: an
 unroutable question lands here, so the prompt has to decline one it cannot
-answer without pretending the decline was the user's fault (DECISIONS.md D-018).
+answer without pretending the decline was the user's fault.
 """
 
 import logging

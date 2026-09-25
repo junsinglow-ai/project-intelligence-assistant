@@ -2,6 +2,10 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 // The API router is mounted at /v1 (backend/app/main.py); /health is not.
 const API = `${BASE_URL}/v1`;
+// Sent when the backend runs with API_AUTH_ENABLED=true. Baked into the bundle
+// at build time, so it identifies this client rather than being a secret.
+const API_KEY = import.meta.env.VITE_API_KEY || "";
+const KEY_HEADERS = API_KEY ? { "X-API-Key": API_KEY } : {};
 
 export const UPLOAD_SUFFIXES = [".pdf", ".csv", ".xlsx", ".xlsm"];
 export const MAX_UPLOAD_MB = 20;
@@ -36,19 +40,21 @@ export function getHealth() {
 }
 
 export function listAgents() {
-  return request(`${API}/agents`);
+  return request(`${API}/agents`, { headers: KEY_HEADERS });
 }
 
 export function chat(question, sessionId) {
   return request(`${API}/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...KEY_HEADERS },
     body: JSON.stringify({ question, session_id: sessionId ?? null }),
   });
 }
 
 export function getSession(sessionId) {
-  return request(`${API}/sessions/${encodeURIComponent(sessionId)}`);
+  return request(`${API}/sessions/${encodeURIComponent(sessionId)}`, {
+    headers: KEY_HEADERS,
+  });
 }
 
 // XHR rather than fetch: fetch has no upload progress events.
@@ -56,6 +62,7 @@ export function uploadFile(file, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${API}/upload`);
+    if (API_KEY) xhr.setRequestHeader("X-API-Key", API_KEY);
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
     };

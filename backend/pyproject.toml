@@ -12,10 +12,10 @@ dependencies = [
     "langchain-core>=1.6.4",
     # Orchestration: the request is one LangGraph state graph and each agent is a
     # create_agent tool loop over its skills. Already resolved transitively via
-    # langchain; declared because the code imports it directly (D-015).
+    # langchain; declared because the code imports it directly (D-005).
     "langgraph>=1.2.12",
     # LLM providers. Both ship in every image: the cloud/on-prem switch is
-    # configuration (DEPLOYMENT_MODE), not a different build. See DECISIONS.md D-010.
+    # configuration (DEPLOYMENT_MODE), not a different build. See ARCHITECTURE.md §8.
     "langchain-google-genai>=4.4.0",
     "langchain-ollama>=1.1.0",
     # Embeddings, vector store, keyword search and re-ranking all run in-process
@@ -32,7 +32,7 @@ dependencies = [
     "duckdb>=1.5.5",
     # Graph checkpointing. Ships in every image for the same reason both LLM
     # providers do: REDIS_URL chooses between Redis and the in-process saver at
-    # startup, not at build time (D-017).
+    # startup, not at build time (D-007).
     "langgraph-checkpoint-redis>=0.5.2",
 ]
 
@@ -40,6 +40,13 @@ dependencies = [
 # `data` and `eval` are non-default groups, so RAGAS (and the openai client it
 # pulls in transitively) never reach the runtime image.
 [dependency-groups]
+# The retrieval benchmark reads its query and label files as YAML. Its own group
+# rather than `eval`, because the whole point of that harness is that it needs no
+# judge model -- putting it in `eval` would drag RAGAS and the openai client it
+# pulls transitively into a run that uses neither.
+bench = [
+    "pyyaml>=6.0.3",
+]
 data = [
     "openpyxl>=3.1.5",
     "reportlab>=5.0.1",
@@ -51,6 +58,8 @@ dev = [
 ]
 eval = [
     "datasets>=5.0.1",
+    "langchain-community>=0.4,<0.4.2",
+    "pyyaml>=6.0.3",
     "ragas>=0.4.3",
 ]
 

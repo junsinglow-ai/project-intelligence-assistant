@@ -62,9 +62,9 @@ def test_each_mode_builds_its_own_chat_model():
 
 
 def test_model_argument_overrides_the_configured_model():
-    """How the router asks for the cheaper model without a second factory."""
-    assert get_llm(ONPREM.router_model, settings=ONPREM).model == "llama3.2:3b"
-    assert get_llm(settings=ONPREM).model == "qwen2.5:7b"
+    """How the router asks for its own model without a second factory."""
+    assert get_llm("llama3.2:3b", settings=ONPREM).model == "llama3.2:3b"
+    assert get_llm(settings=ONPREM).model == "ornith-1.5:35b"
 
 
 def test_construction_does_not_require_a_reachable_endpoint():
@@ -231,7 +231,7 @@ def test_the_strongest_model_is_preferred_when_it_works(chain_of):
 def test_a_local_error_is_raised_rather_than_walked_down_the_chain(chain_of):
     """A bug is not transient: every model would fail it identically.
 
-    NotImplementedError specifically must surface loudly (D-015), not be
+    NotImplementedError specifically must surface loudly (D-005), not be
     swallowed by trying two more models that fail the same way.
     """
     models = chain_of(strong=[NotImplementedError("half-built")],
@@ -314,3 +314,19 @@ def test_retries_stay_low_enough_for_the_chain_to_matter():
 
     assert settings.llm_max_retries <= 2
     assert len(settings.llm_models) > 1, "the chain is what handles a spent quota"
+
+
+def test_an_agent_model_key_naming_no_agent_is_reported():
+    """A typo in `AGENT_MODELS__<NAME>` is valid config that does nothing, so
+    readiness has to be the thing that says so."""
+    from app.llm.providers import unknown_agent_model_keys
+
+    settings = _onprem(agent_models={"document_q": "x", "rewrite": "y", "router": "z"})
+
+    assert unknown_agent_model_keys(settings) == ["document_q"]
+
+
+def test_readiness_reports_each_agent_chain():
+    settings = _onprem(agent_models={"data_analysis": "a,b"})
+
+    assert check_llm_ready(settings)["models"]["agent:data_analysis"] == ["a", "b"]

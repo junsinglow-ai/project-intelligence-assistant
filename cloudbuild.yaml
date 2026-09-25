@@ -1,4 +1,4 @@
-# Builds the backend image for Cloud Run (DECISIONS.md D-009).
+# Builds the backend image for Cloud Run (DECISIONS.md D-008).
 #
 # `gcloud run deploy --source` expects a Dockerfile at the root of the source
 # directory, but this one lives in backend/ while its build context is the

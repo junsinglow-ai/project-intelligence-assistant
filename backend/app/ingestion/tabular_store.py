@@ -4,7 +4,7 @@ Ingestion writes here; the Data Analysis Agent reads through
 `read_only_connection()` and may only run SQL that `validate_select()` has
 accepted. Both halves live in this module because they are one defence, and
 because the third layer below can only be configured where the connection is
-opened (DECISIONS.md D-007).
+opened (ARCHITECTURE.md §6.1).
 
 The defence is three layers, not two:
 
@@ -193,7 +193,7 @@ def validate_select(sql: str) -> str:
 def read_only_connection(settings: Settings | None = None) -> duckdb.DuckDBPyConnection:
     """Open the store read-only and sealed off from the filesystem.
 
-    Layers 2 and 3 of the D-007 defence. Every caller must use this, including
+    Layers 2 and 3 of the SQL containment. Every caller must use this, including
     `list_tables()`: DuckDB caches one instance per path per process, so a
     second connection opened with a different config raises.
     """

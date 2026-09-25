@@ -1,6 +1,6 @@
 """Where the chat graph checkpoints, and what happens when Redis is not there.
 
-`REDIS_URL` selects the store (DECISIONS.md D-017). Everything here but the
+`REDIS_URL` selects the store (DECISIONS.md D-007). Everything here but the
 `redis`-marked test runs without a Redis: what matters is which saver gets
 built, that an unreachable one degrades instead of failing the request, and
 that eviction still reaches the store it chose.

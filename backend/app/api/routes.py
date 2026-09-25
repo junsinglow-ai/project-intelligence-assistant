@@ -5,9 +5,10 @@ import os
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 
 from app.agents.registry import list_agents
+from app.api.auth import require_api_key
 from app.api.schemas import (
     AgentSummary,
     ChatRequest,
@@ -18,14 +19,20 @@ from app.api.schemas import (
 )
 from app.config import get_settings
 from app.llm.providers import any_model_present, check_llm_ready
+from app.llm.usage import usage_scope
 from app.observability.context import trace_id_var
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Every endpoint but the readiness probe. That one stays open because a host's
+# health check and `make ready` carry no key, and it reports configuration, not
+# corpus content (its Redis URL is redacted).
+_KEYED = [Depends(require_api_key)]
 
-@router.get("/agents", response_model=list[AgentSummary], tags=["agents"])
+
+@router.get("/agents", response_model=list[AgentSummary], tags=["agents"], dependencies=_KEYED)
 def get_agents() -> list[AgentSummary]:
     """List registered agents, what they handle, and the skills they can call."""
     return [AgentSummary(name=a.name, description=a.description,
@@ -33,7 +40,7 @@ def get_agents() -> list[AgentSummary]:
             for a in list_agents()]
 
 
-@router.post("/upload", response_model=UploadResponse, tags=["documents"])
+@router.post("/upload", response_model=UploadResponse, tags=["documents"], dependencies=_KEYED)
 async def upload(file: UploadFile) -> UploadResponse:
     """Ingest a PDF or CSV/Excel document."""
     from app.ingestion.pipeline import PDF_SUFFIXES, TABULAR_SUFFIXES, ingest_file
@@ -68,7 +75,7 @@ async def upload(file: UploadFile) -> UploadResponse:
 
 
 @router.post("/chat", response_model=ChatResponse, tags=["chat"])
-async def chat(req: ChatRequest) -> ChatResponse:
+async def chat(req: ChatRequest, client: str | None = Depends(require_api_key)) -> ChatResponse:
     """Route a question to the right agent and return an answer with citations."""
     # Imported here, like the ingestion pipeline above: keeps the retrieval and
     # model stack off the import path of endpoints that do not need it.
@@ -90,7 +97,8 @@ async def chat(req: ChatRequest) -> ChatResponse:
         # One graph per request: rewrite -> route -> the chosen agent's skill
         # loop. Everything that used to sit between here and an agent -- the
         # follow-up rewrite, the routing decision, the fallbacks -- is a node.
-        state = await run_chat_graph(req.question, session_id, history)
+        with usage_scope() as usage:
+            state = await run_chat_graph(req.question, session_id, history)
         result = state["result"]
     except NotImplementedError as exc:
         raise HTTPException(status_code=501, detail=str(exc)) from exc
@@ -104,21 +112,25 @@ async def chat(req: ChatRequest) -> ChatResponse:
     store.append(session_id, req.question, result.answer, result.agent)
     logger.info("chat", extra={"fields": {
         "session_id": session_id,
+        "client": client,
         "agent": result.agent,
+        "model": result.model,
         "routing": result.metadata.get("routing"),
         "rewritten": state.get("rewritten", False),
         "retrieved": result.metadata.get("retrieved"),
         "sql": result.metadata.get("sql"),
         "tool_calls": result.metadata.get("tool_calls"),
         "citations": len(result.citations),
+        "tokens": usage.summary(),
         "latency_ms": round((time.perf_counter() - started) * 1000, 1),
     }})
-    return ChatResponse(answer=result.answer, agent=result.agent,
+    return ChatResponse(answer=result.answer, agent=result.agent, model=result.model,
                         citations=result.citations, session_id=session_id,
                         trace_id=trace_id)
 
 
-@router.get("/sessions/{session_id}", response_model=SessionResponse, tags=["chat"])
+@router.get("/sessions/{session_id}", response_model=SessionResponse, tags=["chat"],
+            dependencies=_KEYED)
 async def get_session(session_id: str) -> SessionResponse:
     """Return the message history for a session."""
     from app.memory.session_store import get_session_store, valid_session_id
@@ -192,7 +204,7 @@ def _check_checkpointer(settings) -> dict:
     """Ping the checkpoint store.
 
     Reported even though an unreachable Redis only degrades the graph to the
-    in-process saver (D-017): that degradation is exactly what `status:
+    in-process saver (D-007): that degradation is exactly what `status:
     "degraded"` is for, and it is otherwise invisible until someone reads a log.
     """
     if not settings.redis_url:

@@ -103,6 +103,7 @@ export default function App() {
               role: "assistant",
               content: res.answer,
               agent: res.agent,
+              model: res.model,
               citations: res.citations,
               traceId: res.trace_id,
             },

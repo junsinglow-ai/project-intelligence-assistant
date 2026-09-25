@@ -24,6 +24,8 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
 
+from langchain.agents.middleware import AgentMiddleware
+
 from app.agents.base import Citation
 
 _MARKER_RE = re.compile(r"\[(\d+)\]")
@@ -62,6 +64,10 @@ class Evidence:
             self.tool_calls += 1
             return True
 
+    @property
+    def spent(self) -> bool:
+        return bool(self.budget) and self.tool_calls >= self.budget
+
     def record(self, items: list[Any]) -> int:
         """Append `items` and return the 1-based index the first one was given.
 
@@ -75,7 +81,29 @@ class Evidence:
             return start
 
 
+class EnforceBudget(AgentMiddleware):
+    """Stop offering the skills to the model once the budget is spent.
+
+    `BUDGET_SPENT` asks the model to stop; this makes it. Gemma 4 26B was
+    measured ignoring the message -- a `data_analysis` question spent its two
+    calls, then asked for a third and a fourth, each declined, until the
+    recursion limit discarded the answer it could have given. A request with no
+    tools leaves the model nothing to do but answer, which ends the loop.
+    """
+
+    def _gate(self, request):  # type: ignore[no-untyped-def]
+        evidence = current_evidence()
+        return request.override(tools=[]) if evidence and evidence.spent else request
+
+    def wrap_model_call(self, request, handler):  # type: ignore[no-untyped-def]
+        return handler(self._gate(request))
+
+    async def awrap_model_call(self, request, handler):  # type: ignore[no-untyped-def]
+        return await handler(self._gate(request))
+
+
 _evidence_var: ContextVar[Evidence | None] = ContextVar("evidence", default=None)
+_tap_var: ContextVar[list[Evidence] | None] = ContextVar("evidence_tap", default=None)
 
 
 @contextmanager
@@ -83,10 +111,34 @@ def evidence_scope(budget: int = 0) -> Iterator[Evidence]:
     """Collect skill output for the duration of one agent run."""
     evidence = Evidence(budget=budget)
     token = _evidence_var.set(evidence)
+    tap = _tap_var.get()
+    if tap is not None:
+        tap.append(evidence)
     try:
         yield evidence
     finally:
         _evidence_var.reset(token)
+
+
+@contextmanager
+def evidence_tap() -> Iterator[list[Evidence]]:
+    """Expose every collector opened beneath this scope, in full, to the caller.
+
+    For the RAGAS runner. Faithfulness has to be judged against what the model
+    actually read, and the response carries only 200-character snippets of the
+    passages it *cited* -- and, for a query, the SQL rather than its rows -- so
+    scoring against citations would mark true claims as hallucinated. This is
+    the evaluation's view of the full evidence without adding it to
+    `AgentResult`, where it would be checkpointed with every turn. Nothing in
+    the request path opens a tap, so outside an evaluation this costs one
+    ContextVar read per agent run.
+    """
+    collectors: list[Evidence] = []
+    token = _tap_var.set(collectors)
+    try:
+        yield collectors
+    finally:
+        _tap_var.reset(token)
 
 
 def current_evidence() -> Evidence | None:

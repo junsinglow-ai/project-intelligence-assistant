@@ -34,6 +34,17 @@ for _name in (
 ):
     os.environ[_name] = ""
 
+# Per-agent model overrides have open-ended names (`AGENT_MODELS__<AGENT>`), so
+# blank whichever ones the shell or either `.env` location supplies.
+_REPO = Path(__file__).resolve().parents[2]
+for _env_file in (_REPO / ".env", _REPO / "backend" / ".env"):
+    if _env_file.exists():
+        for _line in _env_file.read_text().splitlines():
+            if _line.startswith("AGENT_MODELS__"):
+                os.environ[_line.split("=", 1)[0].strip()] = ""
+for _name in [n for n in os.environ if n.startswith("AGENT_MODELS__")]:
+    os.environ[_name] = ""
+
 DATA_RAW = Path(__file__).resolve().parents[2] / "data" / "raw"
 
 STATUS_REPORT_Q1 = DATA_RAW / "Conduit_Unified_LLM_Gateway_Status_Report_2026-Q1.pdf"

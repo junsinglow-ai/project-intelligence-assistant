@@ -4,9 +4,9 @@
 
 The node set is built from `list_agents()`, so registering an agent adds a node
 with no edit here -- the registry stays the extension point it always was
-(DECISIONS.md D-015). The failure rules ARCHITECTURE.md section 5.4 sets out are
+(DECISIONS.md D-005). The failure rules ARCHITECTURE.md section 4.4 sets out are
 enforced in these nodes rather than in any agent: routing that fails falls back
-to `document_qa`, an agent that raises becomes a degraded result, and
+to `small_talk`, an agent that raises becomes a degraded result, and
 `NotImplementedError` is re-raised so a half-built agent surfaces as a 501
 instead of being reported as an answer.
 """
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 async def _rewrite(state: ChatState) -> dict[str, Any]:
     """Resolve a follow-up into a standalone question before anything routes it.
 
-    Kept rather than replaced by the checkpointer (D-013, D-015): the checkpoint
+    Kept rather than replaced by the checkpointer (D-007, D-005): the checkpoint
     holds graph state, but what reaches an agent is still one question, so the
     prompt does not grow with the conversation.
     """

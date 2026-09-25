@@ -90,7 +90,7 @@ async def test_a_skill_outside_an_agent_run_still_works(stub_retrieval):
     "SELECT * FROM read_csv_auto('/etc/passwd')",
 ])
 async def test_a_rejected_statement_comes_back_as_text_not_an_exception(tiny_store, statement):
-    """D-014's containment is unchanged; what changes is that the model sees why."""
+    """The SQL containment is unchanged; what changes is that the model sees why."""
     with evidence_scope() as evidence:
         answer = await run_sql.ainvoke({"sql": statement})
 

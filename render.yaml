@@ -1,6 +1,6 @@
 # Fallback deployment, kept for the case where attaching a billing account to
 # GCP is not an option. Cloud Run is the primary target -- see DECISIONS.md
-# D-009 for why, and `make deploy-backend`.
+# D-008 for why, and `make deploy-backend`.
 #
 # The trade-off Render's free tier imposes: 512MB against a measured 348MB
 # warm footprint, and 0.1 vCPU for a request that runs an ONNX embedding and a
@@ -19,7 +19,7 @@ services:
       - key: DEPLOYMENT_MODE
         value: cloud
       # Qdrant and Redis stay external so the deployment keeps the topology
-      # D-003 and D-017 describe rather than falling back to embedded mode.
+      # D-003 and D-007 describe rather than falling back to embedded mode.
       - key: QDRANT_URL
         sync: false
       - key: QDRANT_API_KEY

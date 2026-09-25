@@ -2,7 +2,7 @@
 
 `backend/Dockerfile` downloads the embedding and re-ranking models at build
 time so a scale-to-zero host does not re-download ~150MB inside the first
-request (DECISIONS.md D-009). The model names live in build args rather than in
+request (DECISIONS.md D-008). The model names live in build args rather than in
 the application config, because that layer deliberately sits before `COPY app`
 so an application edit does not invalidate the download. That duplication is
 the thing worth testing: if a default moves in `app/config.py` and the

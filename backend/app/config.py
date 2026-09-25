@@ -13,7 +13,7 @@ deployment and is identical in both modes: in-process, except for Qdrant and
 Redis, which are containers on the same network and call nothing out. That is
 deliberate: it is what makes the
 switch one variable instead of a migration, and it means an index built in one
-mode is valid in the other. See DECISIONS.md D-010.
+mode is valid in the other. See ARCHITECTURE.md §8.
 """
 
 from functools import lru_cache
@@ -30,7 +30,8 @@ DeploymentMode = Literal["cloud", "onprem"]
 # so a relative path is anchored here rather than to the current directory.
 # Absolute paths are left alone, which is what the container passes in.
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_PATH_SETTINGS = ("data_raw_dir", "upload_dir", "qdrant_path", "tabular_db_path")
+_PATH_SETTINGS = ("data_raw_dir", "upload_dir", "qdrant_path", "tabular_db_path",
+                  "api_keys_db_path")
 
 
 def _anchor(path: str) -> str:
@@ -66,9 +67,13 @@ def _model_chain(value: str) -> list[str]:
     """
     return [m.strip() for m in value.split(",") if m.strip()]
 
+# The call sites that fall back to ROUTER_MODEL rather than LLM_MODEL when they
+# have no `agent_models` entry of their own.
+ROUTER_CALL_SITES = ("router", "rewrite")
+
 # Per-mode defaults for knobs left blank. An explicit value always wins, so
 # these are defaults, not overrides.
-_MODE_DEFAULTS: dict[str, dict[str, str | int]] = {
+_MODE_DEFAULTS: dict[str, dict[str, str | int | dict[str, str]]] = {
     "cloud": {
         "llm_provider": "google",
         # Chains, not single models, because the free tier rate-limits by model
@@ -87,18 +92,38 @@ _MODE_DEFAULTS: dict[str, dict[str, str | int]] = {
         # the note on `_any_present` in `app/llm/providers.py`.
         "llm_model": "gemini-3.6-flash,gemini-3.5-flash,gemini-flash-lite-latest",
         "router_model": "gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-flash-lite-latest",
+        # Each model call gets its own chain, so a stronger model is used only
+        # where a weaker one cannot do the job (D-001). Every chain leads with
+        # Gemma 4 26B, a mixture-of-experts model with ~4B parameters active,
+        # which the provider does not charge for; the billed Gemini model that
+        # closes each chain is there for availability. The 31B dense model was
+        # tried for SQL and dropped: same answer, 155s against the 26B's
+        # seconds. Unlisted agents fall back to LLM_MODEL, and `rewrite` to
+        # ROUTER_MODEL.
+        "agent_models": {
+            "router": "gemma-4-26b-a4b-it,gemini-3.5-flash-lite,gemini-3.5-flash",
+            "rewrite": "gemma-4-26b-a4b-it,gemini-3.5-flash-lite,gemini-3.5-flash",
+            "small_talk": "gemma-4-26b-a4b-it,gemini-3.5-flash-lite,gemini-3.5-flash",
+            "document_qa": "gemma-4-26b-a4b-it,gemini-3.6-flash,gemini-3.8-flash",
+            "data_analysis": "gemma-4-26b-a4b-it,gemini-3.6-flash,gemini-3.8-flash",
+        },
         "llm_timeout_s": 60,
     },
     "onprem": {
         "llm_provider": "ollama",
-        "llm_model": "qwen2.5:7b",
-        "router_model": "llama3.2:3b",
+        # One model for both roles. On-prem there is no per-call cost to save by
+        # routing on a smaller model, and a second model is a second set of
+        # weights resident on the Ollama host -- or swapped in and out between
+        # the route and agent nodes of every request. A 35B model assumes a GPU
+        # host; see README.md for running a small model on constrained hardware.
+        "llm_model": "ornith-1.5:35b",
+        "router_model": "ornith-1.5:35b",
         # CPU inference is slow enough to trip ordinary timeouts. Measured on a
         # loaded 12-core CPU-only laptop, llama3.2:3b took 154s to answer over
         # 2.1k tokens of context, and qwen2.5:7b exceeded 300s because the model
         # did not fit in free RAM and swapped. This is a safety net, not a
         # latency target: a timeout that fires just before the answer arrives is
-        # worse than one that waits. Hardware guidance is in README.md.
+        # worse than one that waits.
         "llm_timeout_s": 600,
     },
 }
@@ -107,7 +132,11 @@ _MODE_DEFAULTS: dict[str, dict[str, str | int]] = {
 class Settings(BaseSettings):
     # Both locations are read, later winning: the backend is usually run from
     # `backend/` (uv, pytest) while `.env` lives at the repository root.
-    model_config = SettingsConfigDict(env_file=(".env", "../.env"), extra="ignore")
+    # The nested delimiter is what fills `agent_models` from
+    # `AGENT_MODELS__<AGENT_NAME>` variables; it affects no scalar field.
+    model_config = SettingsConfigDict(
+        env_file=(".env", "../.env"), extra="ignore", env_nested_delimiter="__"
+    )
 
     app_env: str = "development"
     log_level: str = "INFO"
@@ -121,6 +150,12 @@ class Settings(BaseSettings):
     llm_provider: str = ""
     llm_model: str = ""
     router_model: str = ""
+    # Per-call-site model chains, keyed by agent name (plus `rewrite`, the one
+    # model call that is not an agent), from `AGENT_MODELS__DOCUMENT_QA=...`.
+    # A dict rather than a field per agent, because adding an agent must not
+    # mean editing this file. Explicit keys override the mode default key by
+    # key, so overriding one agent keeps the others' defaults.
+    agent_models: dict[str, str] = {}
     llm_api_key: str = ""                          # cloud mode only
     ollama_base_url: str = "http://ollama:11434"   # on-prem; any internal host
     llm_timeout_s: int = 0                         # 0 means "use the mode default"
@@ -148,7 +183,7 @@ class Settings(BaseSettings):
     # default, which is what local development and the test suite use. The
     # image sets it so the weights are baked into a build layer: on a
     # scale-to-zero host an unset cache re-downloads ~150MB on every cold
-    # start, and it does so inside the first request (D-009). Deliberately not
+    # start, and it does so inside the first request (D-008). Deliberately not
     # in `_PATH_SETTINGS` -- anchoring would turn blank into the repo root and
     # lose the "use the library default" meaning.
     embedding_cache_dir: str = ""
@@ -182,10 +217,10 @@ class Settings(BaseSettings):
 
     # --- Agent tool loops (mode-invariant, deliberately) ---
     # A skill loop multiplies generation cost by its iterations, and
-    # ARCHITECTURE.md section 7.1 measured 154s per on-prem generation, so an
+    # ARCHITECTURE.md §2.1 measured 154s per on-prem generation, so an
     # unbounded loop would exceed even the 600s on-prem timeout. This stays
     # mode-invariant because tests/test_config_modes.py asserts that exactly
-    # the five LLM settings differ between modes (D-010); a constrained host
+    # the five LLM settings differ between modes (ARCHITECTURE.md §8); a constrained host
     # lowers it explicitly rather than by switching mode.
     agent_max_tool_calls: int = 3
 
@@ -194,7 +229,7 @@ class Settings(BaseSettings):
     # in-process, which is what the test suite and a single-replica deployment
     # want; the Compose stack points it at the redis service. Mode-invariant for
     # the same reason as everything else here -- Redis is a container inside the
-    # deployment boundary, so on-prem runs the identical configuration (D-017).
+    # deployment boundary, so on-prem runs the identical configuration (D-007).
     redis_url: str = ""
     # Checkpoints expire on their own rather than only when the session store
     # evicts them: that store is process-local, so its eviction cannot be the
@@ -216,6 +251,15 @@ class Settings(BaseSettings):
 
     max_upload_mb: int = 20
 
+    # --- API keys (mode-invariant) ---
+    # Off by default so the local stack and the tests need no key. When on,
+    # every /v1 endpoint except the readiness probe needs an `X-API-Key` issued
+    # by `make api-key`. The store is its own file, never the tables store,
+    # because `run_sql` executes model-written SQL against that one
+    # (ARCHITECTURE.md §6.2).
+    api_auth_enabled: bool = False
+    api_keys_db_path: str = "./data/processed/api_keys.duckdb"
+
     @model_validator(mode="before")
     @classmethod
     def _blank_means_unset(cls, data: Any) -> Any:
@@ -228,13 +272,19 @@ class Settings(BaseSettings):
         apply.
         """
         if isinstance(data, dict):
-            return {k: v for k, v in data.items() if v != ""}
+            data = {k: v for k, v in data.items() if v != ""}
+            if isinstance(data.get("agent_models"), dict):
+                data["agent_models"] = {
+                    k: v for k, v in data["agent_models"].items() if v != ""
+                }
         return data
 
     @model_validator(mode="after")
     def _resolve_mode_defaults(self) -> "Settings":
         for field, default in _MODE_DEFAULTS[self.deployment_mode].items():
-            if not getattr(self, field):
+            if isinstance(default, dict):
+                object.__setattr__(self, field, {**default, **getattr(self, field)})
+            elif not getattr(self, field):
                 object.__setattr__(self, field, default)
         for field in _PATH_SETTINGS:
             object.__setattr__(self, field, _anchor(getattr(self, field)))
@@ -253,6 +303,26 @@ class Settings(BaseSettings):
     def router_models(self) -> list[str]:
         """The routing chain, strongest first. Never empty."""
         return _model_chain(self.router_model)
+
+    def models_for(self, name: str) -> list[str]:
+        """The chain for one model call site: an agent's name, or `rewrite`.
+
+        Its own `AGENT_MODELS__<NAME>` entry if there is one; otherwise the
+        router and the follow-up rewrite share ROUTER_MODEL, and every agent
+        falls back to LLM_MODEL -- so a new agent runs on the default until
+        someone decides it needs its own model. Never empty.
+        """
+        own = _model_chain(self.agent_models.get(name, ""))
+        if own:
+            return own
+        return self.router_models if name in ROUTER_CALL_SITES else self.llm_models
+
+    @property
+    def configured_models(self) -> list[str]:
+        """Every model any chain names, once each, for pulling and probing."""
+        chains = [self.llm_models, self.router_models]
+        chains += [_model_chain(v) for v in self.agent_models.values()]
+        return list(dict.fromkeys(m for chain in chains for m in chain))
 
     @property
     def collection_name(self) -> str:
@@ -293,6 +363,7 @@ class Settings(BaseSettings):
             "router_model": self.router_models[0],
             "llm_fallbacks": self.llm_models[1:],
             "router_fallbacks": self.router_models[1:],
+            "agent_models": {k: _model_chain(v) for k, v in self.agent_models.items()},
             "llm_timeout_s": self.llm_timeout_s,
             "embedding_model": self.embedding_model,
             "collection": self.collection_name,

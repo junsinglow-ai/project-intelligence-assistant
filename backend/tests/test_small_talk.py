@@ -77,3 +77,20 @@ async def test_the_router_can_see_it():
 
     assert "small_talk" in catalogue
     assert "greetings" in catalogue["small_talk"].lower()
+
+
+async def test_the_result_names_the_model_that_answered(scripted_llm, monkeypatch):
+    """Read from the final message, because a fallback may have answered it."""
+    from langchain_core.messages import AIMessage
+
+    async def reply(*a, **k):
+        return {"messages": [AIMessage(content="Hi.", response_metadata={
+            "model_name": "models/gemini-3-flash-lite"})]}
+
+    scripted_llm()
+    monkeypatch.setattr("langchain.agents.create_agent",
+                        lambda **k: type("Loop", (), {"ainvoke": staticmethod(reply)})())
+
+    result = await SmallTalkAgent().run(ask())
+
+    assert result.model == "gemini-3-flash-lite"

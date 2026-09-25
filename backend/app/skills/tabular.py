@@ -1,7 +1,7 @@
 """Schema inspection and read-only SQL, as skills.
 
 These two tools are the only place model output becomes executable, which is why
-the containment in DECISIONS.md D-007/D-014 sits in `app.ingestion.tabular_store`
+the containment in ARCHITECTURE.md §6.1 sits in `app.ingestion.tabular_store`
 rather than here: `validate_select()` parses the statement and requires exactly
 one `SELECT`, and `read_only_connection()` opens the connection read-only with
 external access disabled and the configuration locked.
@@ -163,9 +163,9 @@ def _cell(value) -> str:
 def citations_for(results: list[SqlResult], settings) -> list[Citation]:
     """Cite the files behind every table the queries touched, plus the query.
 
-    D-007 notes that generated SQL is inspectable and therefore good citation
-    material, so it travels as the snippet: a reader can check the figure by
-    reading the statement that produced it.
+    Generated SQL is inspectable and therefore good citation material, so it
+    travels as the snippet: a reader can check the figure by reading the
+    statement that produced it.
     """
     from app.ingestion.tabular_store import read_only_connection
 

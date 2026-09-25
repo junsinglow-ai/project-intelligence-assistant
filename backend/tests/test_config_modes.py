@@ -1,6 +1,6 @@
 """The cloud <-> on-prem switch.
 
-The promise in DECISIONS.md D-010 is that moving to a fully on-premises
+The promise in ARCHITECTURE.md §8 is that moving to a fully on-premises
 deployment is one configuration change with no re-index. These tests are what
 stop that promise rotting: if a future change makes any part of the retrieval
 stack mode-dependent, the parity test fails.
@@ -48,8 +48,8 @@ def test_switching_to_onprem_needs_only_one_variable():
     onprem = Settings(deployment_mode="onprem")
 
     assert onprem.llm_provider == "ollama"
-    assert onprem.llm_model == "qwen2.5:7b"
-    assert onprem.router_model == "llama3.2:3b"
+    assert onprem.llm_model == "ornith-1.5:35b"
+    assert onprem.router_model == "ornith-1.5:35b"
     assert onprem.ollama_base_url  # has a usable default
 
 
@@ -66,7 +66,7 @@ def test_retrieval_stack_is_identical_in_both_modes():
 
     Everything asserted here feeds the index or the retrieval path. If any of it
     diverged, switching modes would require a re-index and the single-config
-    claim in ARCHITECTURE.md section 9 would be false.
+    claim in ARCHITECTURE.md section 8 would be false.
     """
     cloud = Settings(deployment_mode="cloud")
     onprem = Settings(deployment_mode="onprem")
@@ -107,8 +107,62 @@ def test_only_the_llm_differs_between_modes():
         "llm_provider",
         "llm_model",
         "router_model",
+        "agent_models",
         "llm_timeout_s",
     }
+
+
+def test_onprem_runs_every_call_site_on_the_one_model():
+    """No per-agent defaults on-prem: one resident model serves them all."""
+    onprem = Settings(deployment_mode="onprem")
+
+    assert onprem.agent_models == {}
+    for site in ("router", "rewrite", "document_qa", "data_analysis", "small_talk"):
+        assert onprem.models_for(site) == ["ornith-1.5:35b"]
+
+
+def test_cloud_assigns_each_agent_its_own_chain():
+    cloud = Settings(deployment_mode="cloud")
+
+    assert cloud.models_for("data_analysis")[0] == "gemma-4-26b-a4b-it"
+    assert cloud.models_for("document_qa")[0] == "gemma-4-26b-a4b-it"
+    assert cloud.models_for("router")[0] == "gemma-4-26b-a4b-it"
+
+
+def test_an_agent_without_an_entry_falls_back_by_call_site():
+    """A new agent runs on LLM_MODEL until someone gives it a model; the
+    router and the follow-up rewrite fall back to ROUTER_MODEL instead."""
+    settings = Settings(deployment_mode="onprem", llm_model="big", router_model="small")
+
+    assert settings.models_for("some_new_agent") == ["big"]
+    assert settings.models_for("rewrite") == ["small"]
+    assert settings.models_for("router") == ["small"]
+
+
+def test_overriding_one_agent_keeps_the_others_defaults():
+    cloud = Settings(deployment_mode="cloud", agent_models={"document_qa": "x,y"})
+
+    assert cloud.models_for("document_qa") == ["x", "y"]
+    assert cloud.models_for("data_analysis")[0] == "gemma-4-26b-a4b-it"
+
+
+def test_agent_models_are_read_from_nested_environment_variables(monkeypatch):
+    monkeypatch.setenv("AGENT_MODELS__DOCUMENT_QA", "a, b")
+    monkeypatch.setenv("AGENT_MODELS__SMALL_TALK", "")  # blank means "use the default"
+
+    settings = Settings(deployment_mode="onprem")
+
+    assert settings.models_for("document_qa") == ["a", "b"]
+    assert settings.models_for("small_talk") == ["ornith-1.5:35b"]
+
+
+def test_configured_models_lists_every_chain_once():
+    settings = Settings(
+        deployment_mode="onprem", llm_model="a,b", router_model="b",
+        agent_models={"document_qa": "c,a"},
+    )
+
+    assert settings.configured_models == ["a", "b", "c"]
 
 
 def test_explicit_value_survives_mode_resolution():
@@ -117,7 +171,7 @@ def test_explicit_value_survives_mode_resolution():
 
     assert settings.llm_model == "mistral:7b"
     assert settings.llm_timeout_s == 42
-    assert settings.router_model == "llama3.2:3b"  # still defaulted
+    assert settings.router_model == "ornith-1.5:35b"  # still defaulted
 
 
 def test_onprem_allows_a_remote_ollama_host():
@@ -165,7 +219,7 @@ def test_blank_env_values_fall_back_to_defaults():
 
 
 def test_onprem_needs_no_api_key():
-    """The security story in section 8.2: on-prem holds no secrets at all."""
+    """The security story in ARCHITECTURE.md §6.2: on-prem holds no secrets at all."""
     assert Settings(deployment_mode="onprem", llm_api_key="").missing_requirements() == []
 
 

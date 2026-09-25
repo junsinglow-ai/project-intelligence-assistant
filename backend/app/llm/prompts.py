@@ -3,10 +3,10 @@
 These live beside `providers.py` because `app/llm/` is the one layer that talks
 to a model: keeping the text here means the grounding and prompt-injection rules
 are written once and shared by the agents that retrieve context, rather than
-drifting apart across agent modules (ARCHITECTURE.md section 8.1).
+drifting apart across agent modules (ARCHITECTURE.md §6.1).
 
-They are also written for the weakest model that has to run them. On-prem the
-router is `llama3.2:3b` and the answering model `qwen2.5:7b`, so the rules are
+They are also written for the weakest model that has to run them -- a `lite`
+cloud router, or `llama3.2:3b` on a constrained on-prem host -- so the rules are
 explicit and closed-ended rather than relying on the model to infer intent.
 """
 
@@ -132,7 +132,7 @@ DATA_ANALYSIS_SYSTEM = (
 # The only agent with no skills, so this prompt is the whole of its behaviour
 # and every rule in it is a containment rule. It has read nothing: an answer it
 # gives about the project is ungrounded by construction, which is the one
-# failure this text exists to prevent (DECISIONS.md D-018). It is also the
+# failure this text exists to prevent. It is also the
 # routing fallback, so rule 2 -- how it declines a question it cannot answer --
 # is reached far more often than the greetings the agent is named for. Neither
 # GROUNDING_RULES nor INJECTION_RULE applies: both are about handling retrieved

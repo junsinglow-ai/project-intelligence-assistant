@@ -2,7 +2,7 @@
 
 The SQL this agent generates is validated and executed by
 `app.ingestion.tabular_store`, which holds all three layers of the containment
-described in DECISIONS.md D-007 and D-014. Nothing here executes model output
+described in ARCHITECTURE.md §6.1. Nothing here executes model output
 directly; the `run_sql` skill is the only path to the engine, and it goes through
 `validate_select()` and a read-only connection.
 """

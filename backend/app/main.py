@@ -20,6 +20,13 @@ logger.info("configuration resolved", extra={"fields": settings.resolved_summary
 for problem in settings.missing_requirements():
     logger.warning("configuration incomplete", extra={"fields": {"problem": problem}})
 
+from app.llm.providers import unknown_agent_model_keys  # noqa: E402 -- needs logging configured
+
+# A mistyped AGENT_MODELS__<NAME> is legal config that silently does nothing, so
+# say so once at startup rather than leave the agent on LLM_MODEL unannounced.
+for key in unknown_agent_model_keys(settings):
+    logger.warning("agent model for unknown agent", extra={"fields": {"agent": key}})
+
 app = FastAPI(
     title="Project Intelligence Assistant",
     version="1.0.0",

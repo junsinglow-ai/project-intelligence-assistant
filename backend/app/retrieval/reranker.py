@@ -4,10 +4,10 @@ A local ONNX cross-encoder via FlashRank. Hybrid retrieval is tuned for recall:
 it returns candidates that mention the right terms, in an order that reflects
 two crude signals. A cross-encoder reads the question and the chunk together and
 reorders them, which matters most on-prem, where the context window is small and
-every extra token of prompt is measurable latency (DECISIONS.md D-005).
+every extra token of prompt is measurable latency (DECISIONS.md D-004).
 
 Kept local deliberately: a hosted reranker would be a second external call for
-on-prem mode to disable, which would break the single-switch guarantee (D-010).
+on-prem mode to disable, which would break the single-switch guarantee (ARCHITECTURE.md §8).
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ def get_ranker(model: str, cache_dir: str = "") -> Any:
 
     `cache_dir` is part of the cache key so two caches cannot collide on one
     memoised ranker. Blank keeps FlashRank's own default of `/tmp`; the image
-    overrides it, since weights baked into `/tmp` would sit in memory (D-009).
+    overrides it, since weights baked into `/tmp` would sit in memory (D-008).
     """
     from flashrank import Ranker
 

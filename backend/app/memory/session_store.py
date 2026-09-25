@@ -2,7 +2,7 @@
 
 Two responsibilities, both deliberately kept out of the agents: an agent
 receives a question that already stands on its own, which is what lets the
-`AgentInput` -> `AgentResult` contract stay stateless (DECISIONS.md D-013).
+`AgentInput` -> `AgentResult` contract stay stateless (DECISIONS.md D-007).
 
 Storage is in-process. History does not survive a restart and is not shared
 between replicas, so conversational continuity assumes a single backend
@@ -88,9 +88,9 @@ class SessionStore:
 
         # Outside the lock: the graph's checkpointer is keyed by the same session
         # IDs, so an evicted conversation has to drop its checkpoint thread too
-        # or the bound here would be meaningless (D-015). It is no longer the
+        # or the bound here would be meaningless (D-005). It is no longer the
         # only bound -- checkpoints in Redis outlive this process and carry
-        # their own TTL (D-017) -- but it is still the one that reclaims a
+        # their own TTL (D-007) -- but it is still the one that reclaims a
         # thread the moment its conversation is gone.
         for session in dropped:
             self._forget(session)
@@ -147,7 +147,7 @@ async def rewrite_follow_up(question: str, history: list[dict[str, str]],
     Rewriting rather than growing the prompt keeps every downstream prompt the
     size of one question plus its context, whatever the conversation length --
     which matters because prompt processing, not generation, dominates on-prem
-    latency (ARCHITECTURE.md section 7.1).
+    latency (ARCHITECTURE.md §2.1).
 
     Never fails a request: the raw question is returned whenever the rewrite
     errors or comes back implausible.
@@ -158,16 +158,18 @@ async def rewrite_follow_up(question: str, history: list[dict[str, str]],
 
     from app.llm.prompts import REWRITE_PROMPT
     from app.llm.providers import get_structured_llm
+    from app.llm.usage import call_site
 
     settings = settings or get_settings()
     try:
         chain = REWRITE_PROMPT | get_structured_llm(
-            StandaloneQuestion, settings.router_models, settings
+            StandaloneQuestion, settings.models_for("rewrite"), settings
         )
-        rewritten = (await chain.ainvoke({
-            "history": render_history(history),
-            "question": question,
-        })).question.strip()
+        with call_site("rewrite"):
+            rewritten = (await chain.ainvoke({
+                "history": render_history(history),
+                "question": question,
+            })).question.strip()
     except Exception as exc:
         logger.warning("rewrite failed", extra={"fields": {
             "rewritten": False, "error": f"{type(exc).__name__}: {exc}"}})

@@ -91,7 +91,7 @@ def get_llm(model: str | None = None, settings: Settings | None = None) -> BaseC
     """Return one chat model for the active deployment mode.
 
     ``model`` overrides the configured answering model, which is how the router
-    asks for the cheaper ``router_model`` without a second factory.
+    asks for its own chain (``Settings.models_for``) without a second factory.
 
     This returns the *primary* model when a chain is configured. Callers that
     want the fallbacks want ``get_llms()`` or ``get_structured_llm()``; the
@@ -99,6 +99,8 @@ def get_llm(model: str | None = None, settings: Settings | None = None) -> BaseC
     `with_structured_output` both require a real chat model, which
     ``RunnableWithFallbacks`` is not.
     """
+    from app.llm.usage import USAGE_LOGGER
+
     settings = settings or get_settings()
     provider = settings.llm_provider
     model = model or settings.llm_models[0]
@@ -111,6 +113,7 @@ def get_llm(model: str | None = None, settings: Settings | None = None) -> BaseC
             google_api_key=settings.llm_api_key or None,
             timeout=settings.llm_timeout_s,
             max_retries=settings.llm_max_retries,
+            callbacks=[USAGE_LOGGER],
         )
 
     if provider == "ollama":
@@ -121,6 +124,7 @@ def get_llm(model: str | None = None, settings: Settings | None = None) -> BaseC
             base_url=settings.ollama_base_url,
             num_ctx=settings.llm_num_ctx,
             client_kwargs={"timeout": settings.llm_timeout_s},
+            callbacks=[USAGE_LOGGER],
         )
 
     raise ValueError(
@@ -132,7 +136,8 @@ def get_llm(model: str | None = None, settings: Settings | None = None) -> BaseC
 # --------------------------------------------------------------------------
 # Model chains
 #
-# LLM_MODEL and ROUTER_MODEL are comma-separated chains, strongest first. When
+# LLM_MODEL, ROUTER_MODEL and each AGENT_MODELS__<NAME> are comma-separated
+# chains, preferred first. When
 # the strongest model fails with a provider-side error -- on the free tier,
 # usually quota -- the next one answers instead. Retries come first: the
 # per-model `max_retries` is exhausted before the chain moves on, so a
@@ -167,7 +172,7 @@ def _fallback_errors(settings: Settings) -> tuple[type[BaseException], ...]:
     The line is provider-side versus local. Anything the provider returned over
     the wire -- 429 quota, 5xx overload, a timeout -- may well succeed on a
     different model, so it falls through. A local failure (a bad schema, a
-    missing attribute, and `NotImplementedError` above all, which D-015 requires
+    missing attribute, and `NotImplementedError` above all, which D-005 requires
     to surface loudly) is not transient: every model in the chain would fail it
     identically, so it is raised rather than silently retried N more times.
 
@@ -222,12 +227,12 @@ def check_llm_ready(settings: Settings | None = None) -> dict[str, Any]:
     status: dict[str, Any] = {
         "deployment_mode": settings.deployment_mode,
         "provider": settings.llm_provider,
-        "models": {
-            "answering": settings.llm_models,
-            "routing": settings.router_models,
-        },
+        "models": _chains(settings),
         "reachable": False,
     }
+    unknown = unknown_agent_model_keys(settings)
+    if unknown:
+        status["unknown_agent_models"] = unknown
 
     missing = settings.missing_requirements()
     if missing:
@@ -262,9 +267,31 @@ def _chain_present(settings: Settings, available: list[str]) -> dict[str, dict[s
     and the chain has nowhere to go.
     """
     return {
-        "answering": {m: _model_present(m, available) for m in settings.llm_models},
-        "routing": {m: _model_present(m, available) for m in settings.router_models},
+        site: {m: _model_present(m, available) for m in chain}
+        for site, chain in _chains(settings).items()
     }
+
+
+def _chains(settings: Settings) -> dict[str, list[str]]:
+    """The two defaults, then each call site that has a chain of its own."""
+    chains = {"answering": settings.llm_models, "routing": settings.router_models}
+    for site in settings.agent_models:
+        chains[f"agent:{site}"] = settings.models_for(site)
+    return chains
+
+
+def unknown_agent_model_keys(settings: Settings) -> list[str]:
+    """`AGENT_MODELS__<NAME>` keys that name no registered agent.
+
+    Such a key is not an error to pydantic, so a typo would otherwise leave its
+    agent silently running on LLM_MODEL -- which, for a model chosen to save
+    cost or to hold SQL quality, is exactly the failure nobody notices.
+    """
+    from app.agents.registry import list_agents
+    from app.config import ROUTER_CALL_SITES
+
+    known = {a.name for a in list_agents(include_router=True)} | set(ROUTER_CALL_SITES)
+    return sorted(set(settings.agent_models) - known)
 
 
 def _all_present(present: dict[str, dict[str, bool]]) -> bool:

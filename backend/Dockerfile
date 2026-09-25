@@ -16,6 +16,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DATA_RAW_DIR=/app/data/raw \
     UPLOAD_DIR=/app/data/uploads \
     TABULAR_DB_PATH=/app/data/processed/tables.duckdb \
+    API_KEYS_DB_PATH=/app/data/processed/api_keys.duckdb \
     QDRANT_PATH=/app/data/qdrant \
     PATH="/app/.venv/bin:$PATH"
 

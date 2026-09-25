@@ -11,7 +11,7 @@ export default function TypingIndicator() {
           <span className="dots" aria-hidden="true">
             <i /><i /><i />
           </span>
-          Routing to an agent…
+          Answering…
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { AlertTriangle, Check, Copy, FileCheck2, RotateCcw, Sparkles } from "lucide-react";
+import { AlertTriangle, Check, Cpu, Copy, FileCheck2, RotateCcw, Sparkles } from "lucide-react";
 import AgentBadge from "./AgentBadge.jsx";
 import Citations from "./Citations.jsx";
 
@@ -73,6 +73,15 @@ function AssistantMessage({ message, agents }) {
       <div className="msg-body">
         <div className="msg-meta">
           <AgentBadge name={message.agent} description={description} />
+          {/* The model that wrote the answer -- a fallback when the primary
+              was out of quota. Absent on older stored conversations. */}
+          {message.model && (
+            <span className="model-tag" title="Model that wrote this answer">
+              <Cpu size={12} aria-hidden="true" />
+              <span className="sr-only">Model </span>
+              {message.model}
+            </span>
+          )}
         </div>
         <div className="markdown">
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
