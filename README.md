@@ -6,7 +6,7 @@ An AI assistant that ingests project documents (PDF status reports, CSV/Excel fi
 > **API:** https://project-intelligence-backend-215402207736.us-central1.run.app
 > ([`/docs`](https://project-intelligence-backend-215402207736.us-central1.run.app/docs) ·
 > [readiness](https://project-intelligence-backend-215402207736.us-central1.run.app/v1/health/dependencies))
-> **Walkthrough video (3–5 min):** _TBD_
+> **Walkthrough:** [WALKTHROUGH.md](WALKTHROUGH.md) (written in place of the 3–5 min video)
 >
 > Frontend on Vercel, backend on Cloud Run with Qdrant Cloud and Redis Cloud behind it — all inside
 > free tiers (DECISIONS.md D-008). The backend scales to zero, so the first request after an idle
